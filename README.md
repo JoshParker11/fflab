@@ -13,11 +13,16 @@ Live at https://joshparker11.github.io/fflab/
 - **Lab**: reports from our conversations, plus the season simulator
 
 ## Data
-`.github/workflows/refresh.yml` runs `node tools/snapshot.mjs` hourly (every 15 min during games), on every
-push, and on demand (the **pull ↗** link → *Run workflow*). It deploys the site with fresh data; `data/` isn't committed.
-Optional phone alerts: install the ntfy app, subscribe to a private topic name, and add it as the repo secret `NTFY_TOPIC`.
+Two layers:
+- **Live, on every page load** (`js/live.js`): rosters, records, FAAB, live scores, this week's projections
+  and injury tags, Sleeper trending adds/drops, ESPN odds and news, new transactions. Pulse's
+  "what changed" compares against your last visit on that device.
+- **Season model snapshot** (`data/snapshot.json`, committed): all-week projections, stats, usage, market
+  values. Refresh it with `./tools/refresh.sh` (or ask Claude). `.github/workflows/refresh.yml` does the same
+  on demand, and on a schedule once GitHub Actions billing is re-enabled on the account.
 
-Sources: Sleeper API (league, projections, stats, trending), ESPN (odds, game state, news), FantasyCalc (trade values).
+Sources: Sleeper API, ESPN (odds, game state, news), FantasyCalc (trade values). All are free and keyless.
+Optional phone alerts from the snapshot job: set `NTFY_TOPIC` (env var or repo secret) to a private ntfy.sh topic.
 
 ## Model (`js/model.js`, shared by the site and the CLI)
 - Weekly expected points = that week's matchup-aware Sleeper projection × a recency-weighted **form** factor

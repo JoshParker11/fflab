@@ -1,5 +1,6 @@
 import * as M from './model.js';
 import { bars, lines, spark, fromSpec } from './charts.js';
+import { overlay } from './live.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -40,15 +41,19 @@ function who(p, { game = true, w } = {}) {
 async function load() {
   const bust = `?t=${Date.now()}`;
   S = await fetch(`data/snapshot.json${bust}`).then((r) => r.json());
-  CHANGES = await fetch(`data/changes.json${bust}`).then((r) => r.json()).catch(() => []);
+  const baked = await fetch(`data/changes.json${bust}`).then((r) => r.json()).catch(() => []);
   REPORTS = await fetch(`reports/index.json${bust}`).then((r) => r.json()).catch(() => []);
   for (const id in S.players) S.players[id].id = id;
+  $('#stamp-t').textContent = 'pulling live data…';
+  const live = await Promise.race([overlay(S).catch((e) => (console.warn(e), { ok: false, changes: [] })),
+    new Promise((r) => setTimeout(() => r({ ok: false, changes: [] }), 12000))]);
+  CHANGES = [...live.changes, ...baked].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   ME = S.teams.find((t) => t.me);
   const g = (S.schedule[S.week] || []).find((x) => x.includes(ME.rid));
   OPP = g && team(g.find((r) => r !== ME.rid));
   SIM = M.simulate(S, { n: 5000 });
   for (const k in cache) delete cache[k];
-  $('#stamp-t').textContent = `Week ${S.week} · data ${ago(S.generated)} ago`;
+  $('#stamp-t').textContent = `Week ${S.week} · ${live.ok ? 'live now' : 'live pull failed'} · model ${ago(S.generated)} old`;
 }
 
 const TABS = { command: renderCommand, pulse: renderPulse, waivers: renderWaivers, trade: renderTrade,
@@ -105,7 +110,9 @@ function renderCommand() {
   const wp = OPP ? M.winProb(mine, theirs) : null;
   const acts = actions();
   const remaining = Object.keys(S.schedule).map(Number).filter((w) => w >= S.week && w < S.league.playoff_week_start);
-  return `
+  const stale = S.staleWeek ? `<div class="card" style="margin-bottom:14px;border-color:var(--act)"><b class="act">Week ${S.staleWeek} has started.</b> <span class="muted">The season model is still on Week ${S.week}. Ask Claude to run a fresh snapshot.</span></div>` : '';
+  const liveM = S.live.matchups && OPP && (S.live.matchups[ME.rid] || S.live.matchups[OPP.rid]) ? `<div class="row" style="justify-content:center;gap:18px;margin-top:6px"><span class="act">live ${f1(S.live.matchups[ME.rid])}</span><span class="faint">–</span><span class="act">${f1(S.live.matchups[OPP.rid])}</span></div>` : '';
+  return `${stale}
   <div class="kpis">
     ${kpi(`${ME.wins}-${ME.losses}`, 'record', `PF #${rank}`)}
     ${kpi(pct(o.playoffs), 'playoffs')}
@@ -127,6 +134,7 @@ function renderCommand() {
         <div class="who">proj</div>
         <div><div class="big">${f1(theirs.mean)}</div><div class="who">${esc(OPP.owner)}</div></div>
       </div>
+      ${liveM}
       <div class="bar"><span style="width:${wp * 100}%;background:var(--good)"></span><span style="flex:1;background:var(--bad);opacity:.7"></span></div>
       <div class="row"><b class="${wp >= 0.5 ? 'good' : 'bad'}">${pct(wp)} win</b><span class="sp"></span><span class="faint">±${f1(Math.hypot(mine.sd, theirs.sd))} pts swing</span></div>
       <div class="scroll" style="margin-top:8px">${slotTable(myLineup(), myLineup(OPP.rid))}</div>` : '<div class="empty">No matchup</div>'}
@@ -191,7 +199,7 @@ function renderPulse() {
   const myTeams = new Set([...ME.starters, ...(OPP?.starters || [])].map((id) => P(id)?.team));
   return `
   <div class="grid two">
-    <div class="card"><h2>What changed <small>since each refresh · last 7 days</small></h2>
+    <div class="card"><h2>What changed <small>since you last looked · last 7 days</small></h2>
       ${ch || '<div class="empty">No changes logged yet. Each refresh compares with the previous snapshot.</div>'}</div>
     <div class="card"><h2>Trending adds <small>Sleeper, 24h (6h)</small></h2>
       <table>${trending.map((p) => `<tr><td class="l">${who(p, { game: false })}</td><td>${tag[rel(p)] || esc(owner(p.own))}</td><td>${(p.add24 / 1000).toFixed(0)}k<span class="sub">${p.add6 ? `${(p.add6 / 1000).toFixed(0)}k/6h` : ''}</span></td></tr>`).join('')}</table></div>
@@ -413,7 +421,7 @@ document.addEventListener('change', (e) => {
   if (e.target.id === 'partner-sel') { T.partner = Number(e.target.value) || null; T.get = []; T.result = null; route(); }
 });
 window.addEventListener('hashchange', route);
-$('#refresh').addEventListener('click', async () => { $('#refresh').textContent = '…'; await load(); $('#refresh').textContent = 'reload'; route(); });
+$('#refresh').addEventListener('click', async () => { $('#refresh').textContent = '…'; await load(); $('#refresh').textContent = 'refresh'; route(); });
 $('#theme').addEventListener('click', () => {
   const r = document.documentElement; const next = r.dataset.theme === 'light' ? 'dark' : 'light'; r.dataset.theme = next;
   try { localStorage.setItem('fflab-theme', next); } catch {}
