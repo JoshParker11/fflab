@@ -128,3 +128,5 @@ svg.chart .axis { stroke: var(--line); }
 
 .empty { color: var(--faint); padding: 18px 0; text-align: center; }
 .loading { padding: 40px; text-align: center; color: var(--dim); }
+.report th:first-child, .report td:first-child { text-align: left; }
+.report table { display: block; overflow-x: auto; }
