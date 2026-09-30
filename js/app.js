@@ -91,11 +91,14 @@ function actions() {
     out.push({ lvl: 'warn', t: `${x.p.name} is ${x.p.inj} and in your lineup`, d: x.p.injNote || 'Swap him out before kickoff.' });
   for (const x of set) if (x.p?.inj === 'Questionable') {
     const g = S.games[x.p.team];
-    out.push({ lvl: '', t: `${x.p.name} is questionable`, d: `Kickoff ${g ? kick(g.kickoff) : '?'}${g?.neutral ? ' (international — early lock)' : ''}. ${x.p.injNote || ''} Check the final practice report; have a backup ready.` });
+    out.push({ lvl: '', t: `${x.p.name} is questionable`, d: `Kickoff ${g ? kick(g.kickoff) : '?'}${g?.neutral ? ' (international — early lock)' : ''}. ${x.p.injNote ? `${x.p.injNote}. ` : ''}Check the final practice report; have a backup ready.` });
   }
-  const board = waiverBoardCached().filter((r) => r.gain > 2).slice(0, 3);
-  for (const r of board) out.push({ lvl: r.gain > 8 ? 'hi' : '', t: `Waiver: add ${P(r.id).name}${r.bid ? ` ($${r.bid})` : ''}, drop ${P(r.drop).name}`,
-    d: `+${r.gain.toFixed(1)} weighted lineup points ROS; next 3 wks ${r.weeks.slice(0, 3).map((x) => sgn(x)).join(' / ')}.` });
+  if (!cache.plan) {
+    out.push({ lvl: '', t: 'Working out your waiver claims…', d: 'Testing every free agent against every week of your lineup.' });
+    if (!cache.planning) cache.planning = setTimeout(() => { cache.plan = M.waiverPlan(S, ME.rid); if (!location.hash || location.hash === '#command') route(); }, 50);
+  }
+  (cache.plan || []).forEach((r, i) => out.push({ lvl: r.gain > 8 ? 'hi' : '', t: `Claim ${i + 1}: add ${P(r.id).name}${r.bid ? ` ($${r.bid})` : ''}, drop ${P(r.drop).name}`,
+    d: `+${r.gain.toFixed(1)} weighted lineup points ROS; next 3 wks ${r.weeks.slice(0, 3).map((x) => sgn(x)).join(' / ')}.${P(r.id).add24 > 500000 ? ' Heavily added right now; expect competition.' : ''}` }));
   const wk = M.lineupValue(S, M.activeIds(ME)).weeks, avg = wk.reduce((a, b) => a + b, 0) / wk.length;
   wk.slice(1, 6).forEach((v, i) => { if (v < avg * 0.92) out.push({ lvl: '', t: `Week ${S.week + 1 + i} looks thin (${v.toFixed(0)} vs ${avg.toFixed(0)} avg)`,
     d: `Byes: ${M.activeIds(ME).map(P).filter((p) => p?.bye === S.week + 1 + i).map((p) => p.name).join(', ') || 'none — matchups/injuries'}. Plan an add or trade before then.` }); });

@@ -255,15 +255,16 @@ export function waiverBoard(snap, rid, { limit = 40 } = {}) {
       const gain = v.value - base.value;
       if (!best || gain > best.gain) best = { gain, drop: d.id, weeks: v.weeks.map((x, i) => x - base.weeks[i]) };
     }
-    rows.push({ id: p.id, pv, ...best, bid: suggestBid(snap, t, best.gain) });
+    rows.push({ id: p.id, pv, ...best, bid: suggestBid(snap, t, best.gain, p.pos) });
   }
   return rows.sort((a, b) => b.gain - a.gain).slice(0, limit);
 }
 
-// FAAB: roughly $1 per weighted point of lineup gain, scaled by this league's bidding
+// FAAB: K/DEF $0–1. Otherwise roughly $1 per weighted point of lineup gain, scaled by this league's bidding
 // climate (top bid so far) and capped at 60% of our remaining budget.
-export function suggestBid(snap, team, gain) {
+export function suggestBid(snap, team, gain, pos) {
   if (gain <= 0.5) return 0;
+  if (pos === 'K' || pos === 'DEF') return Math.min(1, team.faab); // streamers: never pay up
   const climate = Math.max(10, snap.league.max_bid_seen || 0);
   const raw = gain * (climate / 20);
   return Math.max(1, Math.min(Math.round(raw), Math.floor(team.faab * 0.6)));
@@ -282,4 +283,24 @@ export function positionProfile(snap, w = snap.week) {
   const avg = {};
   for (const k of new Set(slots)) avg[k] = snap.teams.reduce((s, t) => s + (prof[t.rid][k] || 0), 0) / snap.teams.length;
   return { prof, avg };
+}
+
+// A coherent claim plan: take the best add, apply it, then find the next best with what's left
+// (each claim needs its own drop).
+export function waiverPlan(snap, rid, { steps = 3, minGain = 2 } = {}) {
+  const t = snap.teams.find((x) => x.rid === rid);
+  const saved = t.players, plan = [];
+  try {
+    for (let i = 0; i < steps; i++) {
+      const best = waiverBoard(snap, rid, { limit: 1 })[0];
+      if (!best || best.gain < minGain) break;
+      plan.push(best);
+      t.players = [...t.players.filter((id) => id !== best.drop), best.id];
+      snap.players[best.id].own = rid; // so the next pass doesn't pick him again
+    }
+  } finally {
+    for (const s of plan) snap.players[s.id].own = null;
+    t.players = saved;
+  }
+  return plan;
 }
