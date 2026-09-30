@@ -1,0 +1,49 @@
+name: Refresh data & deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+  schedule:
+    - cron: '17 * * * *'          # hourly
+    - cron: '*/15 16-23 * * 0'    # every 15 min during Sunday games (UTC)
+    - cron: '*/15 0-4 * * 1,2,5'  # Sunday/Monday/Thursday night games (UTC)
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fetch previous snapshot (for "what changed")
+        run: |
+          mkdir -p data
+          curl -sf https://joshparker11.github.io/fflab/data/snapshot.json -o data/snapshot.json || true
+          curl -sf https://joshparker11.github.io/fflab/data/changes.json -o data/changes.json || true
+      - name: Snapshot
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: node tools/snapshot.mjs
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
