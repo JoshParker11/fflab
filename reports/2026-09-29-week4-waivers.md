@@ -1,39 +1,71 @@
-# Week 4 waivers & lineup
+# Week 4 waivers: dedicated pass
 
-*Tuesday 9/29, ~10 PM PT — before the Wednesday waiver run. Opponent: BooberEats (3-0).*
+*Tuesday 9/29, ~11 PM PT, before the Wednesday run. Replaces the earlier version, which had a bug: the model only tested dropping bench players, so it never considered swapping defenses.*
 
-> **Claims (each with its own drop), matching the Command tab's plan:**
-> 1. **Wan'Dale Robinson** (WR TEN): bid **$6–8**, drop **Dontayvion Wicks**. Low competition.
-> 2. **Kenyon Sadiq** (TE NYJ): bid **~$12**, drop **Marvin Harrison Jr.** Contested (2.4M adds), so don't chase past ~$15. He becomes a must if you trade LaPorta for Puka.
-> 3. **Chicago Bears DEF**: bid **$1**, drop **Emmett Johnson**. Keep SF for weeks 5–6 (SEA, WAS).
-> 4. *Skip* **Ollie Gordon** unless you want cheap insurance ($3).
+> **Your claims (each needs its own drop):**
 >
-> **Lineup:** start **Harold Fannin over Sam LaPorta**. Watch **Spencer Shrader** (groin, Q, London 9:30 AM ET kickoff). If he isn't practicing fully by Friday, add **Will Reichard** (MIN, 10.1 projected) as a free agent.
+> | # | Add | Bid | Drop | Why |
+> |---|---|---|---|---|
+> | 1 | **Chicago Bears DEF** | $1 | **San Francisco DEF** (swap) | Top-8 unit vs the Jets; SF lost Nick Bosa |
+> | 2 | **Kenyon Sadiq** (TE NYJ) | **$14** | Emmett Johnson | Breakout TE, covers your Week 6 crunch, frees LaPorta for a Puka deal |
+> | 3 | **Wan'Dale Robinson** (WR TEN) | $3 | Chris Godwin | Small upgrade; Godwin's role is sliding with Tampa's backup QB |
+> | 4 | *If you'll offer Irving for Puka:* **Ollie Gordon** (RB MIA) | $6 | Marvin Harrison Jr. | RB depth you'd need once Irving leaves |
+>
+> **Total: $18–24 of your $69.** That leaves about $45 for October injuries, when the best pickups usually appear.
 
-## Why these
+## Where you stand, and what waivers are for
 
-The model builds your best lineup every week from 4 to 17, with and without each free agent. It uses that week's matchup projection, byes, known injuries and random injury draws, so depth counts. Near weeks count more (×0.9 per week out).
+You're 3-0, 2nd in points, with about a 99% playoff chance. Waivers aren't about getting in. They're about the **top-2 bye** (70% now; your rivals are BooberEats, jaythe1st and sim1flowers) and your **weeks 15–17 lineup**. The model shows two thin weeks ahead:
 
-| Move | Weighted gain | Wk 4 / 5 / 6 | Where it pays |
-|---|---|---|---|
-| +Wan'Dale Robinson, −Wicks | **+11.6** | 0.0 / +0.6 / +4.3 | **Week 6** (St. Brown, Chase Brown and LaPorta on bye) and **Week 10**, when Smith, Wicks and Godwin are all on bye |
-| +CHI DEF, −SF DEF | +8.2 | **+4.5** / +2.1 / +1.0 | This week vs the Jets, next week too |
-| +Ollie Gordon, −Emmett Johnson | +2.9 | 0.0 / +0.9 / −0.8 | Only as injury insurance |
-| Plan: +Sadiq −Harrison Jr., then +Robinson −Wicks, then +CHI −E. Johnson | **+12.4, +7.6, +6.9** (each step on top of the last) | | |
+- **Week 6:** St. Brown, Chase Brown and LaPorta are all on bye (your lineup drops from about 148 to 128).
+- **Week 10:** Smith, Wicks, Godwin and Irving are all on bye (about 128).
 
-**Wan'Dale Robinson**: 11 targets in Week 3 and 10–12 projected points a week for the rest of the season. That beats every WR on your bench. Almost nobody is adding him, so a small bid should win.
+So a bench spot is worth a lot more if it covers those weeks or could become a starter. It's worth little if it's a 6th WR who never plays.
 
-**Ollie Gordon is the week's most-added player, but not a big buy for you.** Jaylen Wright (rostered by mgcoluccio) is listed ahead of him on the depth chart and is expected to lead a roughly 60/40 split when healthy. Gordon also faces an elite Vikings defense in Week 4. On your roster he's a bench RB. Bid only what you'd pay for insurance, and let a rival overpay.
+## 1 · Defense: swap, don't stack
 
-**Kenyon Sadiq** (TE NYJ, 2.4M adds) is the model's top add: targets 3 → 3 → 8, a 23.5-point Week 3, and 9–10 projected a week. He covers your TE byes (LaPorta Week 6, Fannin Week 11) and is the TE2 you'd need after a LaPorta-for-Puka trade. Marvin Harrison Jr. (3 → 1 → 5 targets, 5–7 projected) is the cheapest drop. The catch is competition: many managers are chasing him.
+You're right: one defense at a time, and you stream it. The model agrees once it's allowed to consider the swap: **CHI for SF is +8.2, the best defense move available.** Holding two defenses costs a bench spot for no gain.
 
-## Week 4 matchup: projected 147.6 vs 154.3 (≈43% win chance)
+| Unit | Wk 4 opp | NBC rank | Sleeper proj | Notes |
+|---|---|---|---|---|
+| **Chicago** | vs NYJ | **#8** | 8.5 | Beat PHI 27-7 last week; Jets are turnover-light but beatable |
+| Cleveland | vs PIT | #7 | 7.9 | Elite pass rush vs a statue QB; 38.5 total |
+| Buffalo | vs NE | #6 | 7.5 | Fine alternative |
+| San Francisco (yours) | vs DEN | #12 | 6.8 | Bosa out again |
+| Green Bay | @ TB | #14 | 8.4 | Backup QB matchup, but bottom-3 in points allowed |
 
-- Fannin (form 1.39: targets 3 → 6 → 9, 86% of snaps) projects **17.2** vs LaPorta **9.9** (targets 8 → 7 → 4).
-- Chase Brown has the best game environment of the week: CIN–JAX, 51.5 total.
-- Their risk: Waddle (Q, walking boot, "fine" per team source). Worthy has been quiet.
+Next week you re-stream: pick the best matchup again, SF included if it's still out there.
 
-```chart
-{"type":"bars","labels":["QB","RB","RB","WR","WR","TE","K","DEF","FLEX","FLEX"],"values":[6.9,-16.5,-10,7.1,9.6,-2.1,2.2,-1.3,-5.6,3],"height":150}
-```
-*Your projection minus theirs, by slot (Week 4). Their edge is RB (Gibbs 31.4, Walker 24.3, Warren 19.5 after form) plus McBride. Yours is QB and WR, since their WRs are Diggs, Tate and a banged-up Waddle.*
+## 2 · Why Wicks is **not** the drop
+
+My first pass said drop Wicks. That was the model splitting hairs: dropping Wicks, Godwin or Harrison Jr. differs by under 2 points. When it's that close, role should decide:
+
+| Player | Drop cost* | Snaps last 3 | Targets last 3 | Situation |
+|---|---|---|---|---|
+| Emmett Johnson | 1.6 | 36 → 18 → 27% | 2 / 2 / 0 | KC's RB3. Cut first |
+| Marvin Harrison Jr. | 2.3 | 79 → 74 → 77% | 3 / 1 / 5 | Plays a lot, barely targeted |
+| Dontayvion Wicks | 3.4 | 91 → 62 → 88% | 4 / 6 / 5 | **Philadelphia's WR2.** Stable role. Keep |
+| Chris Godwin | 5.9 | 86 → 86 → **62%** | 4 / 3 / 4 | Snaps falling, Mayfield out, same Week 10 bye as Smith/Wicks/Irving |
+
+*\*Points your lineup loses (weighted, rest of season) without him. The site now shows this table on the Waivers tab.*
+
+## 3 · Kenyon Sadiq: the one worth paying for
+
+- **The case:** 7 catches, 105 yards and a TD in Week 3. A 90.8% route rate (top-4 among TEs) and the Jets' #2 target behind Garrett Wilson. He scores **+11.8** for your lineup even with your current TEs, **+21** if LaPorta goes out in the Puka deal.
+- **The risk:** Mason Taylor's return could cut his snaps. One week is one week.
+- **Price:** experts range from 7–13% of budget (most) to 30%+ (one outlier). In this league nobody has bid over $20 all season, and 8 teams haven't bid at all. **$14** should win without overpaying.
+
+## 4 · Ollie Gordon: only as part of the Puka plan
+
+- Experts: 5–7% (SI), 6–14% (standard), 20–30% (Fantasy Squawk). They're split because Jaylen Wright should lead when healthy, and Gordon's efficiency ranks among the league's worst.
+- On your *current* roster he's RB4 and barely moves the needle (+2.9). If you trade Irving, he's your RB3 and worth **+9.8**.
+- mgcoluccio owns Wright and may bid to lock up Miami's backfield. $6 is fine to lose.
+
+## Skipped, and why
+- **Keenan Allen** (9 targets after Pierce's IR): +3–4 for you. Not enough.
+- **Jakobi Meyers, Kalif Raymond:** big one-week spikes (flagged "spike?" on the board); +2 to +8.
+- **Braelon Allen:** already rostered (mgcoluccio).
+
+## After waivers clear
+- **Kicker:** Shrader (groin, Q) kicks in the 9:30 AM ET London game. If he isn't practicing fully by Friday, add Will Reichard (MIN) as a free agent. Drop Wicks or Harrison Jr. for one week if needed.
+- **IR returns:** Charbonnet can come off PUP in Week 5 but isn't practicing yet. Coleman is on IR. Each will need a bench spot when activated. Plan to cut Gordon or Harrison Jr. then.

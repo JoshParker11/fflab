@@ -250,14 +250,28 @@ export function waiverBoard(snap, rid, { limit = 40 } = {}) {
   const rows = [];
   for (const { p, pv } of free) {
     let best = null;
-    for (const d of drops.slice(0, 4)) {
+    // Try our 4 least useful players, plus anyone at the same position (a like-for-like swap,
+    // e.g. one defense for another).
+    const cands = [...drops.slice(0, 4), ...drops.filter((d) => snap.players[d.id]?.pos === p.pos)];
+    const tried = [...new Map(cands.map((c) => [c.id, c])).values()].map((d) => {
       const v = lineupValue(snap, [...ids.filter((x) => x !== d.id), p.id]);
-      const gain = v.value - base.value;
-      if (!best || gain > best.gain) best = { gain, drop: d.id, weeks: v.weeks.map((x, i) => x - base.weeks[i]) };
-    }
+      return { gain: v.value - base.value, drop: d.id, weeks: v.weeks.map((x, i) => x - base.weeks[i]) };
+    });
+    // Drops within 2 points are a coin flip for the model, so cut the one whose role is shrinking.
+    const top = Math.max(...tried.map((x) => x.gain));
+    best = tried.filter((x) => x.gain >= top - 2)
+      .sort((a, b) => snapTrend(snap.players[a.drop]) - snapTrend(snap.players[b.drop]) || b.gain - a.gain)[0];
     rows.push({ id: p.id, pv, ...best, bid: suggestBid(snap, t, best.gain, p.pos) });
   }
   return rows.sort((a, b) => b.gain - a.gain).slice(0, limit);
+}
+
+// Last game's snap share minus the average of the games before it (negative = role shrinking).
+export function snapTrend(p) {
+  const s = (p?.use || []).filter((u) => u && u.snp != null).map((u) => u.snp);
+  if (s.length < 2) return 0;
+  const prior = s.slice(0, -1);
+  return s[s.length - 1] - prior.reduce((a, b) => a + b, 0) / prior.length;
 }
 
 // FAAB: K/DEF $0–1. Otherwise roughly $1 per weighted point of lineup gain, scaled by this league's bidding

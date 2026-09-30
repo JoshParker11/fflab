@@ -1,6 +1,6 @@
-import * as M from './model.js?v=1790745336';
-import { bars, lines, spark, fromSpec } from './charts.js?v=1790745336';
-import { overlay } from './live.js?v=1790745336';
+import * as M from './model.js?v=1790746603';
+import { bars, lines, spark, fromSpec } from './charts.js?v=1790746603';
+import { overlay } from './live.js?v=1790746603';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -229,6 +229,15 @@ function renderPulse() {
 // ------------------------------------------------------------ waivers
 function waiverBoardCached() { return (cache.board ||= M.waiverBoard(S, ME.rid, { limit: 60 })); }
 let wpos = 'ALL';
+const rosPerGame = (p) => { const v = p.proj.slice(S.week).filter((x) => x > 0); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; };
+function dropCosts() {
+  if (cache.dropCosts) return cache.dropCosts;
+  const ids = M.activeIds(ME), base = M.lineupValue(S, ids);
+  return (cache.dropCosts = ids.map((id) => {
+    const v = M.lineupValue(S, ids.filter((x) => x !== id));
+    return { id, cost: base.value - v.value, weeks: v.weeks.map((x, i) => x - base.weeks[i]) };
+  }).sort((a, b) => a.cost - b.cost));
+}
 function renderWaivers() {
   const board = waiverBoardCached().filter((r) => wpos === 'ALL' || P(r.id).pos === wpos);
   const stream = (pos) => Object.values(S.players).filter((p) => !p.own && p.pos === pos)
@@ -242,13 +251,25 @@ function renderWaivers() {
     <div class="row" style="margin-bottom:8px"><div class="seg">${['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF'].map((p) => `<button data-wpos="${p}" class="${p === wpos ? 'on' : ''}">${p}</button>`).join('')}</div>
       <span class="sp"></span><span class="faint">$${ME.faab} left · league high bid $${S.league.max_bid_seen}</span></div>
     <div class="scroll"><table>
-      <tr><th class="l">Player</th><th>Gain</th><th>Next 3 wks</th><th>Bid</th><th class="l">Drop</th><th>W${S.week}</th><th>Usage (snap/tgt/ru)</th><th>Adds 24h</th></tr>
+      <tr><th class="l">Player</th><th>Gain</th><th>Next 3 wks</th><th>Bid</th><th class="l">Drop</th><th>W${S.week}</th><th>Sleeper ROS/g</th><th>Market</th><th>Usage (snap/tgt/ru)</th><th>Adds 24h</th></tr>
       ${board.map((r) => { const p = P(r.id); const u = p.use.slice(-3).filter(Boolean);
         return `<tr><td class="l">${who(p)}</td><td class="${cls(r.gain, 1)}"><b>${sgn(r.gain)}</b></td><td>${r.weeks.slice(0, 3).map((x) => `<span class="${cls(x, 0.3)}">${sgn(x)}</span>`).join(' ')}</td>
-        <td><b>${r.bid ? `$${r.bid}` : '$0'}</b></td><td class="l">${esc(P(r.drop)?.name)}</td><td>${f1(p.proj[S.week] * (p.form || 1))}</td>
+        <td><b>${r.bid ? `$${r.bid}` : '$0'}</b></td><td class="l">${P(r.drop)?.pos === p.pos ? '<span class="pill">swap</span> ' : ''}${esc(P(r.drop)?.name)}</td>
+        <td>${f1(M.weekDist(p, S.week, S.week, S.live).mean)}${p.form >= 1.35 ? '<span class="sub act" title="Most of this comes from one big recent game">spike?</span>' : ''}</td>
+        <td>${f1(rosPerGame(p))}</td><td>${p.fc ? `${(p.fc / 1000).toFixed(1)}k` : '–'}</td>
         <td class="faint">${u.map((x) => `${x.snp ?? '–'}/${x.tgt}/${x.ru}`).join(' · ')}</td><td>${p.add24 ? `${(p.add24 / 1000).toFixed(0)}k` : ''}</td></tr>`; }).join('')}
     </table></div>
     <p class="faint" style="font-size:12px">How it works: every week from now to 17 we build your best lineup with and without the player, using that week's matchup projection, byes, injuries and random injury draws (so depth counts). Near weeks count more (×0.9 per week out). QB/K/DEF are valued as streamable after next week. Suggested bid ≈ $1 per weighted point, scaled to this league's bidding, capped at 60% of your budget.</p>
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h2>Who is expendable on your roster <small>points your lineup loses (weighted, rest of season) if he's gone</small></h2>
+    <div class="scroll"><table><tr><th class="l">Player</th><th>Drop cost</th><th>Worst week without him</th><th>Bye</th><th>Usage (snap/tgt/ru)</th><th>Market</th></tr>
+    ${dropCosts().slice(0, 9).map((d) => { const p = P(d.id); const u = p.use.slice(-3).filter(Boolean); const worst = d.weeks.reduce((m, x, i) => (x < m.x ? { x, i } : m), { x: 0, i: -1 });
+      return `<tr><td class="l">${who(p, { game: false })}</td><td class="${d.cost < 4 ? 'good' : d.cost < 10 ? 'act' : 'bad'}"><b>${d.cost.toFixed(1)}</b></td>
+      <td>${worst.i >= 0 ? `W${S.week + worst.i} ${worst.x.toFixed(1)}` : '—'}</td><td>${p.bye ?? ''}</td>
+      <td class="faint">${u.map((x) => `${x.snp ?? '–'}/${x.tgt}/${x.ru}`).join(' · ')}</td><td>${p.fc ? `${(p.fc / 1000).toFixed(1)}k` : '–'}</td></tr>`; }).join('')}
+    </table></div>
+    <p class="faint" style="font-size:12px">Green = safe to cut. Differences under ~3 points are noise, so break ties on role (snaps, targets), your bye crunch weeks, and whether he'd be a trade chip. Defenses and kickers are swapped like-for-like, never paid for with a bench spot.</p>
   </div>
   <div class="grid half" style="margin-top:14px">
     <div class="card"><h2>Kicker streams</h2>${streamTbl('K')}</div>
