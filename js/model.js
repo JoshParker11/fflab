@@ -261,7 +261,7 @@ export function waiverBoard(snap, rid, { limit = 40 } = {}) {
     const top = Math.max(...tried.map((x) => x.gain));
     best = tried.filter((x) => x.gain >= top - 2)
       .sort((a, b) => snapTrend(snap.players[a.drop]) - snapTrend(snap.players[b.drop]) || b.gain - a.gain)[0];
-    rows.push({ id: p.id, pv, ...best, bid: suggestBid(snap, t, best.gain, p.pos) });
+    rows.push({ id: p.id, pv, ...best, bid: suggestBid(snap, t, best.gain, p.pos, p.add24) });
   }
   return rows.sort((a, b) => b.gain - a.gain).slice(0, limit);
 }
@@ -275,12 +275,14 @@ export function snapTrend(p) {
 }
 
 // FAAB: K/DEF $0–1. Otherwise roughly $1 per weighted point of lineup gain, scaled by this league's bidding
-// climate (top bid so far) and capped at 60% of our remaining budget.
-export function suggestBid(snap, team, gain, pos) {
+// climate (top bid so far) and by demand (Sleeper adds in 24h), capped at 60% of our remaining budget.
+export function suggestBid(snap, team, gain, pos, adds24 = 0) {
   if (gain <= 0.5) return 0;
   if (pos === 'K' || pos === 'DEF') return Math.min(1, team.faab); // streamers: never pay up
   const climate = Math.max(10, snap.league.max_bid_seen || 0);
-  const raw = gain * (climate / 20);
+  // Demand: nobody chasing him → bid low; millions of adds → expect a fight.
+  const demand = adds24 < 20000 ? 0.4 : adds24 < 200000 ? 0.8 : adds24 < 1000000 ? 1 : 1.2;
+  const raw = gain * (climate / 20) * demand;
   return Math.max(1, Math.min(Math.round(raw), Math.floor(team.faab * 0.6)));
 }
 
