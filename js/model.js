@@ -229,6 +229,8 @@ export function evalTrade(snap, myRid, partnerRid, give, get, { n = 3000 } = {})
     me: { rid: myRid, weekly: ma.weeks.map((x, i) => x - mb.weeks[i]), value: ma.value - mb.value,
       next3: ma.weeks.slice(0, 3).reduce((a, b) => a + b, 0) - mb.weeks.slice(0, 3).reduce((a, b) => a + b, 0),
       playoffWeeks: ma.weeks.slice(-3).reduce((a, b) => a + b, 0) - mb.weeks.slice(-3).reduce((a, b) => a + b, 0),
+      // A top-2 seed skips week 15, so the title is weeks 16–17.
+      titleWeeks: ma.weeks.slice(-2).reduce((a, b) => a + b, 0) - mb.weeks.slice(-2).reduce((a, b) => a + b, 0),
       odds0: s0.odds[myRid], odds1: s1.odds[myRid], dropped: mine.dropped },
     them: { rid: partnerRid, weekly: ta.weeks.map((x, i) => x - tb.weeks[i]), value: ta.value - tb.value,
       odds0: s0.odds[partnerRid], odds1: s1.odds[partnerRid], dropped: theirs.dropped },

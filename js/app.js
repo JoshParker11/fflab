@@ -1,6 +1,6 @@
-import * as M from './model.js?v=1790746677';
-import { bars, lines, spark, fromSpec } from './charts.js?v=1790746677';
-import { overlay } from './live.js?v=1790746677';
+import * as M from './model.js?v=1792191733';
+import { bars, lines, spark, fromSpec } from './charts.js?v=1792191733';
+import { overlay } from './live.js?v=1792191733';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -312,7 +312,7 @@ function tradeResult(r) {
     <div class="kpis">
       ${kpi(sgn(r.me.value), 'your weighted ROS pts')}
       ${kpi(sgn(r.me.next3), 'next 3 weeks')}
-      ${kpi(sgn(r.me.playoffWeeks), 'playoff weeks 15–17')}
+      ${kpi(sgn(r.me.titleWeeks), 'title weeks 16–17')}
       ${kpi(d(r.me.odds0.bye, r.me.odds1.bye), 'bye odds')}
       ${kpi(d(r.me.odds0.title, r.me.odds1.title), 'title odds')}
       ${kpi(sgn(r.them.value), `${esc(r.names.them)} weighted`)}
