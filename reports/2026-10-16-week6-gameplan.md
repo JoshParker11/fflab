@@ -1,11 +1,11 @@
 # Week 6 game plan & road to the title
 
-*Friday 10/16. Fresh snapshot after Week 5, 6,000 season sims. Tools: `tools/tradefinder.mjs` searched every 1- and 2-player package across all 11 teams.*
+*Friday 10/16. Fresh snapshot after Week 5, 6,000 season sims. Recent-form now discounts touchdown-spike games that came without extra volume. Tools: `tools/tradefinder.mjs` searched every 1- and 2-player package across all 11 teams.*
 
 > **The short version**
-> 1. **This week (vs ThisIsRachel): no changes.** Your lineup is already the model's best (149.6 vs 114.8, **~87% win**).
-> 2. **Your title is decided in Weeks 16 and 17.** As a top-2 seed (98% likely) you skip Week 15. Regular-season upgrades barely move the needle now.
-> 3. **Best trade: Chase Brown + Harold Fannin → James Cook** (mgcoluccio). Biggest title gain found (34% → 36.4%), and their lineup improves too.
+> 1. **This week (vs ThisIsRachel): no changes.** Your lineup is already the model's best (144.3 vs 114.6, **~84% win**).
+> 2. **Your title is decided in Weeks 16 and 17.** As a top-2 seed (97% likely) you skip Week 15. Regular-season upgrades barely move the needle now.
+> 3. **Best trade: Chase Brown + Harold Fannin → James Cook** (mgcoluccio). Biggest title gain found (33% → 35.2%), and their lineup improves too.
 > 4. **DJ Moore for Fannin + Brian Robinson: fine, but small.** It's a harmless 2-for-1 that frees a roster spot (+0.6 title points). Don't overpay; his shoulder has flared up twice.
 > 5. **Maye: skip.** He's QB3 now, so you'd be buying high, and Dak projects about as well in Weeks 16–17.
 
@@ -13,19 +13,19 @@
 
 | Team | W-L | PF | Playoffs | Bye | #1 seed | Title |
 |---|---|---|---|---|---|---|
-| **bytesmith** | **5-0** | **796** | 100% | **98%** | **89%** | **34%** |
-| BooberEats | 3-2 | 726 | 97% | 62% | 9% | 30% |
-| sim1flowers | 3-2 | 712 | 78% | 13% | 1% | 13% |
-| jaythe1st | 2-3 | 672 | 63% | 6% | 0% | 6% |
-| katiek626 | 4-1 | 652 | 77% | 12% | 1% | 5% |
+| **bytesmith** | **5-0** | **796** | 100% | **97%** | **86%** | **33%** |
+| BooberEats | 3-2 | 726 | 98% | 65% | 11% | 31% |
+| sim1flowers | 3-2 | 712 | 76% | 11% | 1% | 12% |
+| jaythe1st | 2-3 | 672 | 63% | 6% | 0% | 7% |
+| katiek626 | 4-1 | 652 | 78% | 11% | 1% | 5% |
 
 **Why RotoWire and similar sites don't rank you #1:** those power rankings run on *consensus player values*, not points scored. On market value your starters (35.9k) are dead even with BooberEats (35.6k). Your production has come from players the market rates modestly: Watson 5.0k, Javonte 5.4k, Dak 1.5k, Strange 0.5k. The model agrees the playoffs are close to a toss-up between you two:
 
 | | Market value of starters | Model, next 4 weeks | Model, Weeks 16–17 | Actual PF/game |
 |---|---|---|---|---|
-| bytesmith | 35.9k | **154** | **149** | **159** |
-| BooberEats | 35.6k | 143 | **149** | 145 |
-| sim1flowers | 31.9k | 136 | 143 | 142 |
+| bytesmith | 35.9k | **150** | **148** | **159** |
+| BooberEats | 35.6k | 143 | **148** | 145 |
+| sim1flowers | 31.9k | 133 | 142 | 142 |
 
 So you *are* the best team, but your edge in the games that decide the title is small. That's the right lens for every move from here: does it make the Weeks 16–17 lineup or its injury cover better?
 
@@ -33,9 +33,13 @@ So you *are* the best team, but your edge in the games that decide the title is 
 
 Lions and Bengals are on bye (St. Brown, LaPorta, Chase Brown). The lineup you've set matches the model's best:
 
-QB Dak 17.1 · RB Javonte 18.7, Irving 16.9 · WR Watson 23.5, Flowers 17.6 · TE Strange 12.2 · FLEX Bernard 14.0, Fannin 9.0 · K Shrader 12.5 · DEF Chiefs 8.1 (vs LAC, KC −7.5)
+QB Dak 17.1 · RB Javonte 17.7, Irving 15.3 · WR Watson 21.0, Flowers 17.6 · TE Strange 12.2 · FLEX Bernard 14.0, Fannin 9.0 · K Shrader 12.5 · DEF Chiefs 8.1 (vs LAC, KC −7.5)
 
-Rachel projects 114.8 and hasn't even started DeVonta Smith. The only possible tweak is Keenan Allen (11.1) over Fannin at FLEX, worth about 2 points in a game you're ~87% to win. Not worth burning a roster spot on.
+Rachel projects 114.6 and hasn't even started DeVonta Smith. You're ~84% to win, so there's no need to churn.
+
+**Small, optional waiver moves** (the Command tab's plan):
+- **Vikings DEF ($1), drop Brian Robinson.** It's a Week 7 stream (KC's matchup is poor next week), and B. Robinson adds nothing.
+- **Pat Freiermuth (~$4) for Fannin.** A TE-for-TE swap, not a 4th TE: steadier role, better projection. Skip it if you're using Fannin in the Cook offer.
 
 ## Chase Brown: sell while the market still likes him
 
@@ -47,12 +51,12 @@ Rachel projects 114.8 and hasn't even started DeVonta Smith. The only possible t
 
 | Offer | To | Your weighted ROS | Wk 16 / 17 Δ | Title | Their side | Market give/get | Veto |
 |---|---|---|---|---|---|---|---|
-| **Chase Brown + Fannin → James Cook** | mgcoluccio (3-2, 8% playoffs) | **+21.6** | +0.3 / +2.1 | 33.9% → **36.4%** | **+6.7** | 5.3k / 7.0k | medium |
-| Chase Brown + Fannin → Maye + Gainwell | tbwelch (1-4) | +17.8 | +0.7 / −2.5 | 33.9% → 34.3% | +3.3 | 5.3k / 2.2k | high |
-| Chase Brown → Maye | tbwelch | +17.2 | +0.9 / −2.0 | 33.9% → 34.2% | −2.0 | 4.5k / 2.0k | high |
-| Fannin + B. Robinson → DJ Moore | coluccio33 (2-3) | +4.2 | +0.3 / +1.1 | 33.9% → 34.5% | −16.5 | 1.1k / 2.0k | high |
-| Fannin + Godwin → DJ Moore | coluccio33 | +4.1 | +0.3 / +1.6 | 33.9% → 34.7% | −17.3 | 1.2k / 2.0k | high |
-| Chase Brown → Tee Higgins | tbwelch | −6.1 | −1.0 / +0.4 | flat | −7.6 | 4.5k / 3.0k | medium |
+| **Chase Brown + Fannin → James Cook** | mgcoluccio (3-2, 8% playoffs) | **+21.1** | +0.3 / +2.1 | 33.0% → **35.2%** | **+6.7** | 5.3k / 7.0k | medium |
+| Chase Brown + Fannin → Maye + Gainwell | tbwelch (1-4) | +7.3 | +0.2 / −2.9 | 33.0% → 33.2% | +12.6 | 5.3k / 2.2k | high |
+| Chase Brown → Maye | tbwelch | +6.6 | +0.4 / −2.4 | 33.0% → 33.1% | +6.8 | 4.5k / 2.0k | high |
+| Fannin + B. Robinson → DJ Moore | coluccio33 (2-3) | +4.4 | +0.3 / +1.4 | 33.0% → 33.6% | −18.4 | 1.1k / 2.0k | high |
+| Fannin + Godwin → DJ Moore | coluccio33 | +4.0 | +0.3 / +1.9 | 33.0% → 33.6% | −17.0 | 1.2k / 2.0k | high |
+| Chase Brown → Tee Higgins | tbwelch | −7.5 | −1.1 / +0.4 | flat | −7.6 | 4.5k / 3.0k | medium |
 
 **James Cook** is Buffalo's workhorse (24–25 carries in his big games), projected 16–19 every week. His playoff opponents are CHI, DEN and MIA. mgcoluccio is 3-2 but has only an 8% playoff chance by the sims (Jayden Daniels' elbow). They're RB-rich (Swift, Braelon Allen, Wright, Sampson) and starting Kincaid at TE, which is why Brown + Fannin *helps* their lineup. **Pitch:** "You've got five running backs and need a TE. I'll give you an RB1-type plus a starting TE for Cook." If they push back, add Godwin or Bernard (both near-zero value to you). Make the offer **this weekend**. Brown's price only holds while his bye week hides the Perine split, and one more 50/50 game after the bye would cut it.
 

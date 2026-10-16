@@ -20,12 +20,23 @@ export function formFactor(p, cur) {
     const act = p.act?.[w], proj = p.proj?.[w];
     if (act == null || !proj) continue; // didn't play or wasn't projected (bye, new role)
     const wt = RECENCY ** (cur - 1 - w);
-    a += wt * act; pj += wt * proj; wsum += wt;
+    a += wt * damp(p, w, act, proj); pj += wt * proj; wsum += wt;
   }
   if (!pj) return 1;
   const prior = (PRIOR_K[p.pos] ?? 1.2) * (pj / wsum);
   const f = (a + prior) / (pj + prior);
   return Math.min(1.5, Math.max(0.6, f));
+}
+
+// A blow-up game on ordinary volume is mostly touchdown luck: keep only 30% of the
+// points above 1.5× projection unless his opportunities (targets + carries) also jumped.
+function damp(p, w, act, proj) {
+  const u = p.use?.[w];
+  if (!u || act <= 2 * proj) return act;
+  const others = p.use.filter((x, i) => x && i !== w).map((x) => x.tgt + x.ru);
+  const avg = others.length ? others.reduce((a, b) => a + b, 0) / others.length : 0;
+  if (!avg || u.tgt + u.ru > 1.75 * avg) return act; // real role change: trust it
+  return 1.5 * proj + (act - 1.5 * proj) * 0.3;
 }
 
 // Expected league points and SD for player p in week w, seen from week cur.
