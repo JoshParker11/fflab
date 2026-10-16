@@ -87,3 +87,21 @@ You have about five weeks. Do the Brown sale now (before another 50/50 game drag
 - [Yahoo: Charbonnet out Week 6](https://sports.yahoo.com/articles/happened-zach-charbonnet-latest-seahawks-231538530.html)
 - [Footballguys ROS rankings, Week 6](https://www.footballguys.com/article/2026-rest-of-season-rankings-week06)
 - [ESPN ROS rankings](https://www.espn.com/fantasy/football/story/_/id/49949224/fantasy-football-2026-updated-rest-season-rankings)
+
+## Follow-up: Higgins or Jefferson for Chase Brown?
+
+| Offer (to tbwelch, 1-4) | Your weighted ROS | Wk 16–17 Δ | Title | Their side | Market give/get | Veto |
+|---|---|---|---|---|---|---|
+| Brown → Tee Higgins | −7.5 | −0.6 | 33.0% → 33.0% | −7.6 | 4.5k / 3.0k | medium |
+| **Brown → Justin Jefferson** | +5.4 | **+5.2** | 33.0% → **35.9%** | −19.2 | 4.5k / 6.0k | medium |
+| **Brown + Fannin → Jefferson** | +3.2 | +4.8 | 33.0% → **35.9%** | −24.7 | 5.3k / 6.0k | **low** |
+| Brown + Bernard → Jefferson | −1.7 | +5.2 | 33.0% → 35.9% | −22.4 | 5.0k / 6.0k | medium |
+| Brown + Strange → Jefferson | −5.0 | +4.2 | 33.0% → 35.6% | −11.8 | 5.0k / 6.0k | medium |
+| Brown + LaPorta → Jefferson | −14.6 | +2.1 | 33.0% → 35.2% | −2.2 | 7.1k / 6.0k | low |
+| *(for comparison)* Brown + Fannin → James Cook | +21.1 | +2.4 | 33.0% → 35.2% | **+6.7** | 5.3k / 7.0k | medium |
+
+- **Higgins: no.** He projects about the same as Brown (14–16) and doesn't help Weeks 16–17. It's a lateral move.
+- **Jefferson: yes, if tbwelch will do Brown + Fannin.** It's the biggest Week 16–17 upgrade found (+5 points across the two title games). His playoff opponents are WAS and NYJ, and he projects 17–18 a week. The ankle sprain from Week 3 looks behind him: 89% of snaps and 7 targets in Week 5, plus Minnesota's Week 6 bye for extra rest.
+- **The catch:** tbwelch's lineup gets worse by the model (−25), so they may say no. The pitch is their RB room: Kamara is questionable, Mason is on IR, and Harvey, Gainwell and Hubbard are thin. Brown + a starting TE is what a 1-4 team chasing wins would want.
+- **Order:** Offer **Brown + Fannin for Jefferson** first. If tbwelch declines, take the same package to mgcoluccio for **James Cook**. The title gain is similar (35.2% vs 35.9%, within sim noise), and Cook is easier to get accepted because mgcoluccio's lineup improves.
+- **If Jefferson lands:** your RBs become Javonte, Irving, Charbonnet (returning ~Week 7) and B. Robinson. Keep Robinson until Charbonnet is active, and add a backup RB in Weeks 12–14.
