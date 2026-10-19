@@ -16,10 +16,13 @@ export const TIME_DECAY = 0.9;
 
 export function formFactor(p, cur) {
   let a = 0, pj = 0, wsum = 0;
-  for (let w = 1; w < cur; w++) {
+  // Current-week games count once they're final, so a Sunday result moves Monday's view.
+  let last = 0;
+  for (let w = 1; w <= cur; w++) if (p.act?.[w] != null && p.proj?.[w]) last = w;
+  for (let w = 1; w <= last; w++) {
     const act = p.act?.[w], proj = p.proj?.[w];
     if (act == null || !proj) continue; // didn't play or wasn't projected (bye, new role)
-    const wt = RECENCY ** (cur - 1 - w);
+    const wt = RECENCY ** (last - w);
     a += wt * damp(p, w, act, proj); pj += wt * proj; wsum += wt;
   }
   if (!pj) return 1;

@@ -63,7 +63,8 @@ for (const id of keep) {
     const pr = P[w - 1][id];
     proj.push(pr ? score(pr.stats) : 0); opp.push(pr?.opponent || null);
   }
-  for (let w = 1; w < cur; w++) {
+  const doneThisWeek = games[m.team]?.state === 'post';
+  for (let w = 1; w < cur || (w === cur && doneThisWeek); w++) {
     const st = A[w - 1][id]?.stats;
     const played = st && (st.gp || st.off_snp || st.def_snp || st.fga || st.xpa);
     act.push(played ? score(st) : null);
