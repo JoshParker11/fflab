@@ -1,6 +1,6 @@
-import * as M from './model.js?v=1792568343';
-import { bars, lines, spark, fromSpec } from './charts.js?v=1792568343';
-import { overlay } from './live.js?v=1792568343';
+import * as M from './model.js?v=1792568433';
+import { bars, lines, spark, fromSpec } from './charts.js?v=1792568433';
+import { overlay } from './live.js?v=1792568433';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -519,7 +519,9 @@ function titleMovesCard() {
   if (MOVES.running) body = `<div class="empty">Searching every trade and free agent… ${Math.round(MOVES.progress * 100)}%</div>`;
   else if (!MOVES.rows) body = `<div class="empty"><button class="btn" id="find-moves">Find title moves</button><div class="faint" style="margin-top:8px;font-size:12px">Tests every 1-for-1 and 2-for-1 trade with every team plus free-agent swaps, scored on your Week ${pw + 1}–17 lineup. Takes a few seconds.</div></div>`;
   else {
-    const ok = (r) => r.kind === 'FA' || (r.theirGain > -3 && r.gap < 0.4);
+    // Realistic = their title-week lineup doesn't drop much, and we're not taking far more market
+    // value than we give (overpaying is fine: it makes a yes easier).
+    const ok = (r) => r.kind === 'FA' || (r.theirGain > -3 && (r.gt - r.gv) / Math.max(r.gt, r.gv, 1) < 0.4);
     const seen = new Set(), rows = [];
     for (const r of MOVES.rows) {
       if (MOVES.realistic && !ok(r)) continue;
@@ -527,8 +529,9 @@ function titleMovesCard() {
       if (seen.has(key)) continue; seen.add(key); rows.push(r);
       if (rows.length >= 20) break;
     }
-    body = `<div class="row" style="margin-bottom:8px"><label class="muted" style="font-size:13px"><input type="checkbox" id="moves-realistic" ${MOVES.realistic ? 'checked' : ''}> Realistic only (partner's title-week lineup doesn't drop over 3 pts and trade values within 40%)</label><span class="sp"></span><button class="btn ghost" id="find-moves">Re-run</button></div>
-    <div class="scroll"><table><tr><th class="l">Move</th><th class="l">Give</th><th class="l">Get</th><th>Title games</th><th>Reg. season</th><th>Their title games</th><th>Market</th><th></th></tr>
+    for (const r of rows) if (r.regDelta == null) r.regDelta = regularSeasonDelta(r);
+    body = `<div class="row" style="margin-bottom:8px"><label class="muted" style="font-size:13px"><input type="checkbox" id="moves-realistic" ${MOVES.realistic ? 'checked' : ''}> Realistic only (their title-week lineup drops under 3 pts, and you're not taking 40%+ more trade value than you give)</label><span class="sp"></span><button class="btn ghost" id="find-moves">Re-run</button></div>
+    <div class="scroll"><table><tr><th class="l">Move</th><th class="l">Give</th><th class="l">Get</th><th>Title games</th><th>Reg. season<span class="sub">weighted pts</span></th><th>Their title games</th><th>Market</th><th></th></tr>
     ${rows.map((r) => { const key = MOVES.rows.indexOf(r); const sim = MOVES.sims[key];
       return `<tr><td class="l">${r.kind === 'FA' ? '<span class="pill good">waiver</span>' : esc(team(r.partner).owner)}</td>
       <td class="l">${r.give.map((id) => esc(P(id).name)).join(' + ')}</td><td class="l"><b>${r.get.map((id) => esc(P(id).name)).join(' + ')}</b></td>
@@ -540,6 +543,11 @@ function titleMovesCard() {
     </table></div>`;
   }
   return `<div class="card" style="margin-top:14px" id="moves-card"><h2>Title-move finder <small>what improves Weeks ${pw + 1}–17 most</small></h2>${body}</div>`;
+}
+function regularSeasonDelta(r) {
+  const mine = M.activeIds(ME), to = PW() - 1;
+  const ids = M.trimRoster(S, [...mine.filter((x) => !r.give.includes(x)), ...r.get]).ids;
+  return M.lineupValue(S, ids, { from: S.week, to }).value - M.lineupValue(S, mine, { from: S.week, to }).value;
 }
 function runMoveSearch() {
   MOVES.running = true; MOVES.progress = 0; MOVES.sims = {};
