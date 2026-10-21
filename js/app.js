@@ -1,6 +1,6 @@
-import * as M from './model.js?v=1792394380';
-import { bars, lines, spark, fromSpec } from './charts.js?v=1792394380';
-import { overlay } from './live.js?v=1792394380';
+import * as M from './model.js?v=1792568343';
+import { bars, lines, spark, fromSpec } from './charts.js?v=1792568343';
+import { overlay } from './live.js?v=1792568343';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -53,11 +53,12 @@ async function load() {
   OPP = g && team(g.find((r) => r !== ME.rid));
   SIM = M.simulate(S, { n: 5000 });
   for (const k in cache) delete cache[k];
+  MOVES.rows = null; MOVES.sims = {};
   $('#stamp-t').textContent = `Week ${S.week} · ${live.ok ? 'live now' : 'live pull failed'} · model ${ago(S.generated)} old`;
 }
 
 const TABS = { command: renderCommand, pulse: renderPulse, waivers: renderWaivers, trade: renderTrade,
-  opponents: renderOpponents, roster: renderRoster, lab: renderLab };
+  opponents: renderOpponents, roster: renderRoster, playoffs: renderPlayoffs, lab: renderLab };
 function route() {
   const [tab, arg] = (location.hash.slice(1) || 'command').split('/');
   document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
@@ -424,6 +425,150 @@ async function loadReport(file) {
   $('#report').innerHTML = `<p><a href="#lab">← all reports</a></p>${html}`;
 }
 
+
+// ------------------------------------------------------------ playoffs
+// A top-2 seed skips the first playoff week, so the title is the last two weeks.
+const PW = () => S.league.playoff_week_start;
+const heat = (v, scale = 6) => `background:color-mix(in srgb, ${v >= 0 ? 'var(--good)' : 'var(--bad)'} ${Math.min(45, Math.abs(v) * scale)}%, transparent)`;
+const MOVES = { running: false, rows: null, progress: 0, realistic: true, sims: {} };
+
+function projectedBracket() {
+  const seeds = [...S.teams].sort((a, b) => SIM.odds[a.rid].avgSeed - SIM.odds[b.rid].avgSeed).slice(0, S.league.playoff_teams);
+  const d = (w, r) => SIM.dist[Math.min(w, 17)][r];
+  const pick = (w, a, b) => (M.winProb(d(w, a.rid), d(w, b.rid)) >= 0.5 ? a : b);
+  const pw = PW();
+  const q = [[seeds[2], seeds[5]], [seeds[3], seeds[4]]];
+  const qw = q.map(([a, b]) => pick(pw, a, b));
+  const [lo, hi] = seeds.indexOf(qw[0]) > seeds.indexOf(qw[1]) ? [qw[0], qw[1]] : [qw[1], qw[0]];
+  const sf = [[seeds[0], lo], [seeds[1], hi]];
+  const sw = sf.map(([a, b]) => pick(pw + 1, a, b));
+  return { seeds, rounds: [{ w: pw, label: 'Quarterfinals', games: q }, { w: pw + 1, label: 'Semifinals', games: sf }, { w: pw + 2, label: 'Final', games: [sw] }] };
+}
+function gameCard(w, a, b) {
+  const da = SIM.dist[w][a.rid], db = SIM.dist[w][b.rid], p = M.winProb(da, db);
+  const line = (t, dd, pp) => `<div class="row" style="padding:3px 0"><span class="${t.me ? 'act' : ''}" style="flex:1">${esc(t.owner)}</span><span class="faint">${f1(dd.mean)}</span><b class="${pp >= 0.5 ? 'good' : 'muted'}" style="width:44px;text-align:right">${pct(pp)}</b></div>`;
+  return `<div class="kpi" style="margin-bottom:8px">${line(a, da, p)}${line(b, db, 1 - p)}</div>`;
+}
+function renderPlayoffs() {
+  const o = SIM.odds[ME.rid], pw = PW();
+  const weeks = []; for (let w = S.week; w <= 17; w++) weeks.push(w);
+  const nm = (rid) => team(rid).owner;
+  const br = projectedBracket();
+  const oppTable = (map, w) => Object.entries(map).sort((a, b) => b[1] - a[1]).filter(([, p]) => p >= 0.01).map(([r, p]) => {
+    const wp = M.winProb(SIM.dist[w][ME.rid], SIM.dist[w][+r]);
+    return `<tr><td class="l">${esc(nm(+r))}</td><td>${pct(p / Math.max(o[w === pw + 1 ? 'semis' : 'final'], 1e-9))}</td><td>${f1(SIM.dist[w][+r].mean)}</td><td class="${wp >= 0.5 ? 'good' : 'bad'}"><b>${pct(wp)}</b></td></tr>`; }).join('');
+  // strength grid
+  const avgW = Object.fromEntries(weeks.map((w) => [w, S.teams.reduce((t, x) => t + SIM.dist[w][x.rid].mean, 0) / S.teams.length]));
+  const titleAvg = (rid) => (SIM.dist[pw + 1][rid].mean + SIM.dist[pw + 2][rid].mean) / 2;
+  const grid = [...S.teams].sort((a, b) => titleAvg(b.rid) - titleAvg(a.rid));
+  // my players in playoff weeks
+  const pWeeks = [pw, pw + 1, pw + 2];
+  const lus = Object.fromEntries(pWeeks.map((w) => [w, myLineup(ME.rid, w)]));
+  const starts = (id, w) => lus[w].lineup.some((x) => x.p?.id === id);
+  const myIds = M.activeIds(ME).filter((id) => P(id)).sort((a, b) => pWeeks.reduce((t, w) => t + M.weekDist(P(b), w, S.week, S.live).mean - M.weekDist(P(a), w, S.week, S.live).mean, 0));
+  // slot comparison vs the other likely playoff teams in the title weeks
+  const rivals = [...S.teams].filter((t) => !t.me).sort((a, b) => SIM.odds[b.rid].playoffs - SIM.odds[a.rid].playoffs).slice(0, S.league.playoff_teams - 1);
+  const slotCmp = [pw + 1, pw + 2].map((w) => {
+    const mine = myLineup(ME.rid, w).lineup;
+    const theirs = rivals.map((t) => myLineup(t.rid, w).lineup);
+    return { w, rows: mine.map((x, i) => ({ slot: x.slot, p: x.p, mean: x.mean, avg: theirs.reduce((t, l) => t + l[i].mean, 0) / theirs.length })) };
+  });
+  return `
+  <div class="kpis">
+    ${kpi(pct(o.playoffs), 'playoffs')}${kpi(pct(o.bye), 'top-2 bye')}${kpi(pct(o.seed1), '#1 seed')}
+    ${kpi(o.avgSeed.toFixed(2), 'avg seed')}${kpi(pct(o.final), 'reach final')}${kpi(pct(o.title), 'title')}
+  </div>
+  <div class="card" style="margin-top:14px">
+    <h2>Projected bracket <small>most likely seeds · each game uses that week's projected lineups</small></h2>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+      ${br.rounds.map((r) => `<div><div class="muted" style="font-size:12px;margin-bottom:6px">Week ${r.w} · ${r.label}${r.w === pw ? ' <span class="faint">(seeds 1–2 on bye)</span>' : ''}</div>${r.games.map(([a, b]) => gameCard(r.w, a, b)).join('')}</div>`).join('')}
+    </div>
+  </div>
+  <div class="grid two" style="margin-top:14px">
+    <div class="card"><h2>Projected seeding <small>${(5000).toLocaleString()} simulated seasons</small></h2><div class="scroll">
+      <table><tr><th class="l">Team</th><th>Avg seed</th><th>1</th><th>2</th><th>3–6</th><th>Out</th><th>Bye</th><th>Title</th><th>Wk ${pw + 1}–17</th></tr>
+      ${[...S.teams].sort((a, b) => SIM.odds[a.rid].avgSeed - SIM.odds[b.rid].avgSeed).map((t) => { const x = SIM.odds[t.rid]; const mid = x.seeds.slice(2, 6).reduce((a, b) => a + b, 0);
+        return `<tr class="${t.me ? 'me' : ''}"><td class="l">${esc(t.owner)}<span class="sub">${t.wins}-${t.losses}</span></td><td>${x.avgSeed.toFixed(1)}</td><td>${pct(x.seeds[0])}</td><td>${pct(x.seeds[1])}</td><td>${pct(mid)}</td><td class="faint">${pct(1 - x.playoffs)}</td><td>${pct(x.bye)}</td><td><b>${pct(x.title)}</b></td><td>${f1(titleAvg(t.rid))}</td></tr>`; }).join('')}</table></div></div>
+    <div class="card"><h2>Your path <small>who you'd face, and your chances in that game</small></h2>
+      <div class="muted" style="font-size:12.5px;margin-bottom:4px">Week ${pw + 1} semifinal (reached ${pct(o.semis)})</div>
+      <table><tr><th class="l">Opponent</th><th>Likelihood</th><th>Their proj</th><th>You win</th></tr>${oppTable(o.semiOpp, pw + 1)}</table>
+      <div class="muted" style="font-size:12.5px;margin:12px 0 4px">Week ${pw + 2} final (reached ${pct(o.final)})</div>
+      <table><tr><th class="l">Opponent</th><th>Likelihood</th><th>Their proj</th><th>You win</th></tr>${oppTable(o.finalOpp, pw + 2)}</table>
+      <p class="faint" style="font-size:12px">Your projection: Week ${pw + 1} ${f1(SIM.dist[pw + 1][ME.rid].mean)}, Week ${pw + 2} ${f1(SIM.dist[pw + 2][ME.rid].mean)}. Likelihood = share of the times you reach that round.</p></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h2>Team strength by week <small>expected best lineup · color vs that week's league average · sorted by title weeks</small></h2><div class="scroll">
+    <table><tr><th class="l">Team</th>${weeks.map((w) => `<th class="${w >= pw ? 'act' : ''}">W${w}</th>`).join('')}<th>Title avg</th></tr>
+    ${grid.map((t) => `<tr class="${t.me ? 'me' : ''}"><td class="l">${esc(t.owner)}</td>${weeks.map((w) => { const m = SIM.dist[w][t.rid].mean; return `<td style="${heat((m - avgW[w]) / 3, 6)}">${m.toFixed(0)}</td>`; }).join('')}<td><b>${f1(titleAvg(t.rid))}</b></td></tr>`).join('')}
+    </table></div></div>
+  <div class="grid two" style="margin-top:14px">
+    <div class="card"><h2>Your players in the playoffs <small>★ = in your best lineup that week</small></h2><div class="scroll">
+      <table><tr><th class="l">Player</th>${pWeeks.map((w) => `<th>W${w}${w === pw ? '<span class="sub">bye if top 2</span>' : ''}</th>`).join('')}</tr>
+      ${myIds.map((id) => { const p = P(id); return `<tr><td class="l">${who(p, { game: false })}</td>${pWeeks.map((w) => { const m = M.weekDist(p, w, S.week, S.live).mean; return `<td>${starts(id, w) ? '<span class="act">★</span> ' : ''}${f1(m)}<span class="sub">${esc(p.opp?.[w] || 'BYE')}</span></td>`; }).join('')}</tr>`; }).join('')}
+      </table></div></div>
+    <div class="card"><h2>Where you're thin in the title games <small>your starter vs the average of the other likely playoff teams</small></h2>
+      ${slotCmp.map(({ w, rows }) => `<div class="muted" style="font-size:12.5px;margin:6px 0 4px">Week ${w}</div><table>
+        ${rows.map((r) => { const dlt = r.mean - r.avg; return `<tr><td class="l faint">${r.slot}</td><td class="l">${esc(r.p?.name || 'stream')}</td><td>${f1(r.mean)}</td><td class="faint">${f1(r.avg)}</td><td style="${heat(dlt, 6)}"><b>${sgn(dlt)}</b></td></tr>`; }).join('')}</table>`).join('')}
+      <p class="faint" style="font-size:12px">Red slots are where an upgrade moves your title odds most.</p></div>
+  </div>
+  ${titleMovesCard()}`;
+}
+
+function titleMovesCard() {
+  const pw = PW();
+  let body;
+  if (MOVES.running) body = `<div class="empty">Searching every trade and free agent… ${Math.round(MOVES.progress * 100)}%</div>`;
+  else if (!MOVES.rows) body = `<div class="empty"><button class="btn" id="find-moves">Find title moves</button><div class="faint" style="margin-top:8px;font-size:12px">Tests every 1-for-1 and 2-for-1 trade with every team plus free-agent swaps, scored on your Week ${pw + 1}–17 lineup. Takes a few seconds.</div></div>`;
+  else {
+    const ok = (r) => r.kind === 'FA' || (r.theirGain > -3 && r.gap < 0.4);
+    const seen = new Set(), rows = [];
+    for (const r of MOVES.rows) {
+      if (MOVES.realistic && !ok(r)) continue;
+      const key = (r.partner ?? 'FA') + ':' + r.get.join(',');
+      if (seen.has(key)) continue; seen.add(key); rows.push(r);
+      if (rows.length >= 20) break;
+    }
+    body = `<div class="row" style="margin-bottom:8px"><label class="muted" style="font-size:13px"><input type="checkbox" id="moves-realistic" ${MOVES.realistic ? 'checked' : ''}> Realistic only (partner's title-week lineup doesn't drop over 3 pts and trade values within 40%)</label><span class="sp"></span><button class="btn ghost" id="find-moves">Re-run</button></div>
+    <div class="scroll"><table><tr><th class="l">Move</th><th class="l">Give</th><th class="l">Get</th><th>Title games</th><th>Reg. season</th><th>Their title games</th><th>Market</th><th></th></tr>
+    ${rows.map((r) => { const key = MOVES.rows.indexOf(r); const sim = MOVES.sims[key];
+      return `<tr><td class="l">${r.kind === 'FA' ? '<span class="pill good">waiver</span>' : esc(team(r.partner).owner)}</td>
+      <td class="l">${r.give.map((id) => esc(P(id).name)).join(' + ')}</td><td class="l"><b>${r.get.map((id) => esc(P(id).name)).join(' + ')}</b></td>
+      <td class="good"><b>${sgn(r.gain)}</b><span class="sub">pts/game</span></td><td class="${cls(r.regDelta ?? 0, 1)}">${r.regDelta != null ? sgn(r.regDelta) : '–'}</td>
+      <td class="${cls(r.theirGain ?? 0, 0.5)}">${r.theirGain != null ? sgn(r.theirGain) : '–'}</td>
+      <td class="faint">${r.kind === 'FA' ? '' : `${(r.gv / 1000).toFixed(1)}k/${(r.gt / 1000).toFixed(1)}k`}</td>
+      <td>${sim ? `<span class="${cls(sim.d, 0.005)}"><b>${pct(sim.before)}→${pct(sim.after)}</b></span>` : `<button class="btn ghost" data-simmove="${key}" style="padding:3px 8px;font-size:12px">title odds</button>`}
+      ${r.kind === 'trade' ? `<button class="btn ghost" data-openmove="${key}" style="padding:3px 8px;font-size:12px">Trade Lab</button>` : ''}</td></tr>`; }).join('') || '<tr><td class="empty" colspan="8">Nothing clears the bar. Untick "realistic" to see everything.</td></tr>'}
+    </table></div>`;
+  }
+  return `<div class="card" style="margin-top:14px" id="moves-card"><h2>Title-move finder <small>what improves Weeks ${pw + 1}–17 most</small></h2>${body}</div>`;
+}
+function runMoveSearch() {
+  MOVES.running = true; MOVES.progress = 0; MOVES.sims = {};
+  const gen = M.titleMoveSearch(S, ME.rid);
+  const step = () => {
+    const t0 = performance.now(); let r;
+    while (performance.now() - t0 < 40) { r = gen.next(); if (r.done) break; MOVES.progress = r.value.done / r.value.total; }
+    const card = $('#moves-card');
+    if (r.done) { MOVES.running = false; MOVES.rows = r.value; }
+    if (card) card.outerHTML = titleMovesCard();
+    if (!r.done) setTimeout(step, 0);
+  };
+  step();
+}
+function simMove(key) {
+  const r = MOVES.rows[key];
+  const base = M.simulate(S, { n: 4000 });
+  const rosters = Object.fromEntries(S.teams.map((t) => [t.rid, M.activeIds(t)]));
+  rosters[ME.rid] = M.trimRoster(S, [...rosters[ME.rid].filter((x) => !r.give.includes(x)), ...r.get]).ids;
+  if (r.partner) rosters[r.partner] = M.trimRoster(S, [...rosters[r.partner].filter((x) => !r.get.includes(x)), ...r.give]).ids;
+  const owned = r.get.map((id) => [id, P(id).own]);
+  if (!r.partner) { r.get.forEach((id) => (P(id).own = ME.rid)); delete S._floor; } // keep the free agent out of stream floors
+  const after = M.simulate(S, { rosters, n: 4000 });
+  owned.forEach(([id, o]) => (P(id).own = o)); delete S._floor;
+  const b = base.odds[ME.rid].title, a = after.odds[ME.rid].title;
+  MOVES.sims[key] = { before: b, after: a, d: a - b };
+  const card = $('#moves-card'); if (card) card.outerHTML = titleMovesCard();
+}
+
 // ------------------------------------------------------------ events
 function afterRender(tab) {
   const arg = location.hash.split('/')[1];
@@ -437,11 +582,16 @@ document.addEventListener('click', (e) => {
   if (pa) { const r = Number(pa.dataset.partner); if (r !== T.partner) { T.partner = r; T.get = []; T.result = null; } return; }
   if (e.target.id === 'run-trade') { e.target.textContent = 'Simulating…'; setTimeout(() => { T.result = M.evalTrade(S, ME.rid, T.partner, T.give, T.get); route(); }, 20); }
   if (e.target.id === 'clear-trade') { Object.assign(T, { give: [], get: [], result: null }); route(); }
+  if (e.target.id === 'find-moves') { runMoveSearch(); return; }
+  const sm = e.target.closest('[data-simmove]'); if (sm) { sm.textContent = '…'; setTimeout(() => simMove(+sm.dataset.simmove), 20); return; }
+  const om = e.target.closest('[data-openmove]');
+  if (om) { const r = MOVES.rows[+om.dataset.openmove]; Object.assign(T, { partner: r.partner, give: [...r.give], get: [...r.get], result: null }); location.hash = 'trade'; return; }
   const tb = e.target.closest('nav button'); if (tb) location.hash = tb.dataset.tab;
 });
 document.addEventListener('change', (e) => {
   if (e.target.id === 'give-sel' && e.target.value) { T.give.push(e.target.value); T.result = null; route(); }
   if (e.target.id === 'get-sel' && e.target.value) { T.get.push(e.target.value); T.result = null; route(); }
+  if (e.target.id === 'moves-realistic') { MOVES.realistic = e.target.checked; const c = $('#moves-card'); if (c) c.outerHTML = titleMovesCard(); return; }
   if (e.target.id === 'partner-sel') { T.partner = Number(e.target.value) || null; T.get = []; T.result = null; route(); }
 });
 window.addEventListener('hashchange', route);

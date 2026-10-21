@@ -161,7 +161,9 @@ export function simulate(snap, { rosters, n = 4000, seed = 7 } = {}) {
     for (const r of rids) dist[w][r] = bestLineup(ids[r], snap.players, w, cur, slots, snap.live, { floor: floorsFor(snap, w) });
   }
   const R = rng(seed);
-  const out = Object.fromEntries(rids.map((r) => [r, { playoffs: 0, bye: 0, seed1: 0, title: 0, final: 0, wins: 0, weekWin: {} }]));
+  const out = Object.fromEntries(rids.map((r) => [r, { playoffs: 0, bye: 0, seed1: 0, title: 0, final: 0, semis: 0, wins: 0, weekWin: {},
+    seeds: Array(rids.length).fill(0), quarterOpp: {}, semiOpp: {}, finalOpp: {} }]));
+  const bump = (o, k) => { o[k] = (o[k] || 0) + 1; };
   const draw = (w, r) => dist[w][r].mean + dist[w][r].sd * R.n();
   for (let i = 0; i < n; i++) {
     const W = {}, PF = {};
@@ -177,20 +179,28 @@ export function simulate(snap, { rosters, n = 4000, seed = 7 } = {}) {
     order.slice(0, snap.league.playoff_teams).forEach((r) => out[r].playoffs++);
     order.slice(0, 2).forEach((r) => out[r].bye++);
     out[order[0]].seed1++;
+    order.forEach((r, i) => out[r].seeds[i]++);
     for (const r of rids) out[r].wins += W[r];
     // Bracket: wk15 3v6 & 4v5; wk16 1 v lowest seed left, 2 v other; wk17 final.
     const s = order; const pw = snap.league.playoff_week_start;
     const game = (w, a, b) => (draw(Math.min(w, 17), a) > draw(Math.min(w, 17), b) ? a : b);
     const q1 = game(pw, s[2], s[5]), q2 = game(pw, s[3], s[4]);
+    bump(out[s[2]].quarterOpp, s[5]); bump(out[s[5]].quarterOpp, s[2]);
+    bump(out[s[3]].quarterOpp, s[4]); bump(out[s[4]].quarterOpp, s[3]);
     const [lo, hi] = s.indexOf(q1) > s.indexOf(q2) ? [q1, q2] : [q2, q1];
+    for (const [a, b] of [[s[0], lo], [s[1], hi]]) { out[a].semis++; out[b].semis++; bump(out[a].semiOpp, b); bump(out[b].semiOpp, a); }
     const f1 = game(pw + 1, s[0], lo), f2 = game(pw + 1, s[1], hi);
     out[f1].final++; out[f2].final++;
+    bump(out[f1].finalOpp, f2); bump(out[f2].finalOpp, f1);
     out[game(pw + 2, f1, f2)].title++;
   }
   for (const r of rids) {
     const o = out[r];
-    for (const k of ['playoffs', 'bye', 'seed1', 'title', 'final', 'wins']) o[k] /= n;
+    for (const k of ['playoffs', 'bye', 'seed1', 'title', 'final', 'semis', 'wins']) o[k] /= n;
     for (const w in o.weekWin) o.weekWin[w] /= n;
+    o.seeds = o.seeds.map((c) => c / n);
+    o.avgSeed = o.seeds.reduce((t, p, i) => t + p * (i + 1), 0);
+    for (const k of ['quarterOpp', 'semiOpp', 'finalOpp']) for (const r in o[k]) o[k][r] /= n;
   }
   return { odds: out, dist };
 }
@@ -335,4 +345,62 @@ export function waiverPlan(snap, rid, { steps = 3, minGain = 2 } = {}) {
     t.players = saved;
   }
   return plan;
+}
+
+// ---- title-move search ----
+// Every 1-for-1 and 2-for-1 trade with every team, plus free-agent swaps, scored on the
+// weeks that decide the title (default 16–17 for a bye team). A generator, so the page can
+// run it in slices without freezing.
+export function* titleMoveSearch(snap, rid, { from = snap.league.playoff_week_start + 1, to = 17, maxGive = 2 } = {}) {
+  const P = snap.players, me = snap.teams.find((t) => t.rid === rid);
+  const lv = (ids, a = from, b = to) => lineupValue(snap, ids, { from: a, to: b });
+  const per = (v) => v.weeks.reduce((x, y) => x + y, 0) / v.weeks.length; // pts per title game
+  const mine = activeIds(me), base = lv(mine), baseReg = lineupValue(snap, mine, { from: snap.week, to: snap.league.playoff_week_start - 1 }).value;
+  const pool = mine.filter((id) => !['K', 'DEF'].includes(P[id]?.pos));
+  const gives = [];
+  for (let i = 0; i < pool.length; i++) {
+    gives.push([pool[i]]);
+    if (maxGive > 1) for (let j = i + 1; j < pool.length; j++) gives.push([pool[i], pool[j]]);
+  }
+  const titlePts = (p) => { let t = 0; for (let w = from; w <= to; w++) t += weekDist(p, w, snap.week, snap.live).mean; return t / (to - from + 1); };
+  const jobs = [];
+  for (const t of snap.teams.filter((x) => x.rid !== rid)) {
+    const theirs = activeIds(t);
+    for (const id of theirs) if (['QB', 'RB', 'WR', 'TE'].includes(P[id]?.pos) && titlePts(P[id]) >= 9) jobs.push({ t, get: id, theirs });
+  }
+  const fas = Object.values(P).filter((p) => !p.own && ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(p.pos))
+    .sort((a, b) => titlePts(b) - titlePts(a)).slice(0, 30);
+  const total = jobs.length + fas.length; let done = 0;
+  const rows = [];
+  for (const p of fas) {
+    let best = null;
+    for (const d of mine) {
+      const v = lv([...mine.filter((x) => x !== d), p.id]);
+      const g = per(v) - per(base);
+      if (!best || g > best.gain) best = { kind: 'FA', partner: null, give: [d], get: [p.id], gain: g };
+    }
+    if (best.gain > 0.3) rows.push(best);
+    done++; if (done % 5 === 0) yield { done, total };
+  }
+  for (const { t, get, theirs } of jobs) {
+    const tb = lv(theirs);
+    for (const give of gives) {
+      const ids = trimRoster(snap, [...mine.filter((x) => !give.includes(x)), get]).ids;
+      const g = per(lv(ids)) - per(base);
+      if (g < 0.5) continue;
+      const their = trimRoster(snap, [...theirs.filter((x) => x !== get), ...give]).ids;
+      const gv = give.reduce((s2, id) => s2 + (P[id].fc || 0), 0), gt = P[get].fc || 0;
+      rows.push({ kind: 'trade', partner: t.rid, give, get: [get], gain: g, theirGain: per(lv(their)) - per(tb),
+        gap: Math.abs(gv - gt) / Math.max(gv, gt, 1), gv, gt });
+    }
+    done++; yield { done, total };
+  }
+  rows.sort((a, b) => b.gain - a.gain);
+  // Regular-season cost for the leaders, so a playoff boost that sinks the bye is visible.
+  for (const r of rows.slice(0, 40)) {
+    const ids = r.kind === 'FA' ? [...mine.filter((x) => !r.give.includes(x)), ...r.get]
+      : trimRoster(snap, [...mine.filter((x) => !r.give.includes(x)), ...r.get]).ids;
+    r.regDelta = lineupValue(snap, ids, { from: snap.week, to: snap.league.playoff_week_start - 1 }).value - baseReg;
+  }
+  return rows;
 }
