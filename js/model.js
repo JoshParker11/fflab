@@ -424,3 +424,30 @@ export function* titleMoveSearch(snap, rid, { from = snap.league.playoff_week_st
   }
   return rows;
 }
+
+// ---- scenarios: chains of trades / adds, simulated together ----
+// steps: [{ partner: rid | null (free agent), give: [ids], get: [ids] }]
+export function runScenario(snap, steps, { n = 4000, seed = 11, base } = {}) {
+  const me = snap.teams.find((t) => t.me);
+  const rosters = Object.fromEntries(snap.teams.map((t) => [t.rid, activeIds(t)]));
+  const touched = [];
+  for (const st of steps) {
+    rosters[me.rid] = trimRoster(snap, [...rosters[me.rid].filter((x) => !st.give.includes(x)), ...st.get]).ids;
+    if (st.partner != null) rosters[st.partner] = trimRoster(snap, [...rosters[st.partner].filter((x) => !st.get.includes(x)), ...st.give]).ids;
+    else for (const id of st.get) { touched.push([id, snap.players[id].own]); snap.players[id].own = me.rid; }
+  }
+  delete snap._floor;
+  const b = base || simulate(snap, { n, seed });
+  const a = simulate(snap, { rosters, n, seed });
+  for (const [id, o] of touched) snap.players[id].own = o;
+  delete snap._floor;
+  const pw = snap.league.playoff_week_start;
+  const fc = (ids) => ids.reduce((t, id) => t + (snap.players[id]?.fc || 0), 0);
+  return {
+    base: b, after: a,
+    me: { rid: me.rid, title: [b.odds[me.rid].title, a.odds[me.rid].title], bye: [b.odds[me.rid].bye, a.odds[me.rid].bye],
+      w16: a.dist[pw + 1][me.rid].mean - b.dist[pw + 1][me.rid].mean, w17: a.dist[pw + 2][me.rid].mean - b.dist[pw + 2][me.rid].mean },
+    steps: steps.map((st) => ({ ...st, give$: fc(st.give), get$: fc(st.get),
+      partnerOdds: st.partner == null ? null : { title: [b.odds[st.partner].title, a.odds[st.partner].title], playoffs: [b.odds[st.partner].playoffs, a.odds[st.partner].playoffs] } })),
+  };
+}

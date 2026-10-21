@@ -1,6 +1,6 @@
-import * as M from './model.js?v=1792619727';
-import { bars, lines, spark, fromSpec } from './charts.js?v=1792619727';
-import { overlay } from './live.js?v=1792619727';
+import * as M from './model.js?v=1792624809';
+import { bars, lines, spark, fromSpec } from './charts.js?v=1792624809';
+import { overlay } from './live.js?v=1792624809';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -54,11 +54,12 @@ async function load() {
   SIM = M.simulate(S, { n: 5000 });
   for (const k in cache) delete cache[k];
   MOVES.rows = null; MOVES.sims = {};
+  if (typeof SC !== 'undefined') { SC.base = null; SC.results = {}; }
   $('#stamp-t').textContent = `Week ${S.week} · ${live.ok ? 'live now' : 'live pull failed'} · model ${ago(S.generated)} old`;
 }
 
 const TABS = { command: renderCommand, pulse: renderPulse, waivers: renderWaivers, trade: renderTrade,
-  opponents: renderOpponents, roster: renderRoster, playoffs: renderPlayoffs, lab: renderLab };
+  opponents: renderOpponents, roster: renderRoster, playoffs: renderPlayoffs, scenarios: renderScenarios, research: renderResearch, lab: renderLab };
 function route() {
   const [tab, arg] = (location.hash.slice(1) || 'command').split('/');
   document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
@@ -577,6 +578,140 @@ function simMove(key) {
   const card = $('#moves-card'); if (card) card.outerHTML = titleMovesCard();
 }
 
+
+// ------------------------------------------------------------ scenarios
+// Presets live in reports/scenarios.json (by player/owner name, so they survive refreshes);
+// your own chains are saved in this browser.
+const SC = { presets: null, results: {}, base: null, draft: [], step: { partner: '', give: [], get: [] }, running: false };
+const SC_KEY = 'fflab-scenarios';
+const savedScenarios = () => { try { return JSON.parse(localStorage.getItem(SC_KEY)) || []; } catch { return []; } };
+const saveScenarios = (v) => { try { localStorage.setItem(SC_KEY, JSON.stringify(v)); } catch {} };
+const pidByName = (n) => Object.values(S.players).find((p) => p.name === n)?.id;
+const ridByOwner = (o) => S.teams.find((t) => t.owner === o)?.rid;
+function resolve(sc) { // names -> ids; flags anything that moved
+  const problems = [];
+  const steps = sc.steps.map((st) => {
+    const partner = st.partner === 'FA' || st.partner == null ? null : ridByOwner(st.partner);
+    const give = st.give.map(pidByName), get = st.get.map(pidByName);
+    give.forEach((id, i) => { if (!id || !ME.players.includes(id)) problems.push(`${st.give[i]} isn't on your roster`); });
+    get.forEach((id, i) => { if (!id) problems.push(`${st.get[i]} not found`); else if (partner != null && !team(partner).players.includes(id)) problems.push(`${st.get[i]} isn't on ${st.partner}`); else if (partner == null && P(id).own) problems.push(`${st.get[i]} is rostered`); });
+    return { partner, give, get };
+  });
+  return { steps, problems };
+}
+function scenarioBase() { return (SC.base ||= M.simulate(S, { n: 4000, seed: 11 })); }
+function rival() { const b = scenarioBase(); return S.teams.filter((t) => !t.me).sort((a, c) => b.odds[c.rid].title - b.odds[a.rid].title)[0]; }
+function runOne(key, sc) {
+  const { steps, problems } = resolve(sc);
+  if (problems.length) { SC.results[key] = { problems }; return; }
+  const r = M.runScenario(S, steps, { n: 4000, seed: 11, base: scenarioBase() });
+  const rv = rival();
+  SC.results[key] = { r, rival: [r.base.odds[rv.rid].title, r.after.odds[rv.rid].title], rivalName: rv.owner };
+}
+function scenarioRow(key, sc, mine) {
+  const res = SC.results[key];
+  const stepsTxt = sc.steps.map((st) => `<div><span class="faint">${esc(st.partner === 'FA' || st.partner == null ? 'waivers' : st.partner)}:</span> ${st.give.map(esc).join(' + ')} → <b>${st.get.map(esc).join(' + ')}</b></div>`).join('');
+  let cells;
+  if (!res) cells = `<td colspan="6"><button class="btn ghost" data-runsc="${key}" style="padding:3px 10px;font-size:12px">run</button></td>`;
+  else if (res.problems) cells = `<td colspan="6" class="bad" style="white-space:normal;font-size:12px">${res.problems.map(esc).join('; ')}</td>`;
+  else { const m = res.r.me; const d = m.title[1] - m.title[0];
+    cells = `<td><b>${pct(m.title[0])}→${pct(m.title[1])}</b></td><td class="${cls(d, 0.004)}"><b>${sgn(d * 100)}</b></td><td>${pct(m.bye[1])}</td>
+      <td class="${cls(m.w16 + m.w17, 0.5)}">${sgn(m.w16)} / ${sgn(m.w17)}</td><td>${pct(res.rival[0])}→${pct(res.rival[1])}</td>
+      <td class="l" style="white-space:normal;font-size:12px">${res.r.steps.map((st) => st.partner == null ? 'waivers' : `${esc(team(st.partner).owner)} ${pct(st.partnerOdds.playoffs[0])}→${pct(st.partnerOdds.playoffs[1])} PO · ${(st.give$ / 1000).toFixed(1)}k/${(st.get$ / 1000).toFixed(1)}k`).join('<br>')}</td>`; }
+  return `<tr><td class="l" style="white-space:normal"><b>${esc(sc.name)}</b>${sc.note ? `<span class="sub">${esc(sc.note)}</span>` : ''}${mine ? ` <button class="chip" data-delsc="${mine}" style="padding:0 6px">delete</button>` : ''}</td><td class="l" style="white-space:normal;font-size:12.5px">${stepsTxt}</td>${cells}</tr>`;
+}
+function renderScenarios() {
+  if (!SC.presets) { fetch(`reports/scenarios.json?t=${Date.now()}`).then((r) => r.json()).then((p) => { SC.presets = p; route(); }).catch(() => { SC.presets = []; route(); }); return '<div class="loading">loading scenarios…</div>'; }
+  const b = scenarioBase(), rv = rival();
+  const mine = savedScenarios();
+  const head = `<tr><th class="l">Scenario</th><th class="l">Steps</th><th>Your title</th><th>Δ pts</th><th>Bye</th><th>Wk ${PW() + 1} / ${PW() + 2}</th><th>${esc(rv.owner)} title</th><th class="l">Partners (playoff odds · value give/get)</th></tr>`;
+  const st = SC.step, partners = S.teams.filter((t) => !t.me);
+  const pool = st.partner === 'FA' ? Object.values(S.players).filter((p) => !p.own && p.pos).sort((a, c) => M.playerValue(S, c.id) - M.playerValue(S, a.id)).slice(0, 80).map((p) => p.id)
+    : st.partner ? team(+st.partner).players : [];
+  const opt = (ids, sel) => ids.map(P).filter(Boolean).map((p) => `<option value="${p.id}" ${sel.includes(p.id) ? 'disabled' : ''}>${esc(p.name)} · ${p.pos} ${p.team || ''}</option>`).join('');
+  return `
+  <div class="kpis">${kpi(pct(b.odds[ME.rid].title), 'your title odds now')}${kpi(pct(b.odds[ME.rid].bye), 'bye odds now')}${kpi(`${esc(rv.owner)} ${pct(b.odds[rv.rid].title)}`, 'top rival')}</div>
+  <div class="card" style="margin-top:14px"><h2>Saved scenarios <small>4,000 seasons each · same random draws as the baseline, so differences are real</small></h2>
+    <div class="row" style="margin-bottom:8px"><button class="btn" id="run-all-sc" ${SC.running ? 'disabled' : ''}>${SC.running ? 'Running…' : 'Run all'}</button><span class="sp"></span><span class="faint" style="font-size:12px">Edit presets in reports/scenarios.json (ask Claude) or build your own below.</span></div>
+    <div class="scroll"><table>${head}
+      ${SC.presets.map((sc, i) => scenarioRow('p' + i, sc)).join('')}
+      ${mine.map((sc, i) => scenarioRow('m' + i, sc, String(i + 1))).join('')}
+    </table></div></div>
+  <div class="card" style="margin-top:14px"><h2>Build a scenario <small>chain several trades or waiver adds, then simulate them together</small></h2>
+    ${SC.draft.length ? `<div class="chips">${SC.draft.map((d, i) => `<span class="chip">${esc(d.partner)}: ${d.give.map(esc).join(' + ')} → ${d.get.map(esc).join(' + ')} <button data-dropstep="${i}">×</button></span>`).join('')}</div>` : '<p class="faint">No steps yet.</p>'}
+    <div class="grid half">
+      <div><select id="sc-partner"><option value="">step partner…</option><option value="FA" ${st.partner === 'FA' ? 'selected' : ''}>Waivers / free agent</option>${partners.map((t) => `<option value="${t.rid}" ${String(t.rid) === st.partner ? 'selected' : ''}>${esc(t.owner)}</option>`).join('')}</select>
+        <select id="sc-give" style="margin-top:6px"><option value="">+ you give / drop</option>${opt(ME.players, st.give)}</select>
+        <div class="chips">${st.give.map((id) => `<span class="chip">${esc(P(id).name)} <button data-scrm="give:${id}">×</button></span>`).join('')}</div></div>
+      <div>${st.partner ? `<select id="sc-get"><option value="">+ you get</option>${opt(pool, st.get)}</select>` : ''}
+        <div class="chips">${st.get.map((id) => `<span class="chip">${esc(P(id).name)} <button data-scrm="get:${id}">×</button></span>`).join('')}</div></div>
+    </div>
+    <div class="row" style="margin-top:8px"><button class="btn ghost" id="sc-addstep" ${st.partner && st.give.length && st.get.length ? '' : 'disabled'}>Add step</button>
+      <input type="text" id="sc-name" placeholder="scenario name" style="flex:1"><button class="btn" id="sc-save" ${SC.draft.length ? '' : 'disabled'}>Save & run</button></div>
+  </div>`;
+}
+function runAllScenarios() {
+  const all = [...SC.presets.map((sc, i) => ['p' + i, sc]), ...savedScenarios().map((sc, i) => ['m' + i, sc])];
+  SC.running = true; route();
+  let i = 0;
+  const step = () => { if (i >= all.length) { SC.running = false; route(); return; } const [k, sc] = all[i++]; runOne(k, sc); route(); setTimeout(step, 10); };
+  setTimeout(step, 20);
+}
+
+
+// ------------------------------------------------------------ research
+let RESEARCH = null;
+function renderResearch() {
+  if (!RESEARCH) { fetch(`data/research.json?t=${Date.now()}`).then((r) => r.json()).then((d) => { RESEARCH = d; route(); }).catch(() => { RESEARCH = { error: true }; route(); }); return '<div class="loading">loading research…</div>'; }
+  if (RESEARCH.error) return '<div class="card"><div class="empty">No research data yet. Run tools/research.py.</div></div>';
+  const R = RESEARCH, POSS = ['QB', 'RB', 'WR', 'TE'], c2 = (v) => (v == null ? '–' : v.toFixed(2));
+  const decayChart = (pos) => lines({ labels: R.decay[pos].map((d) => `+${d.h}`), height: 150, fmt: (v) => v.toFixed(2),
+    series: [{ name: 'player scoring so far', values: R.decay[pos].map((d) => d.talent_corr), color: 'var(--good)' },
+             { name: 'opponent softness so far', values: R.decay[pos].map((d) => d.matchup_corr), color: 'var(--bad)' }] });
+  const acc = R.accuracy, v = R.vegas_vs_dvp, e = R.early_predicts_late, fm = R.form;
+  return `
+  <div class="card"><h2>What the history says <small>${R.seasons[0]}–${R.seasons.at(-1)} · ${R.n.toLocaleString()} player-games · your league's scoring</small></h2>
+    <div class="grid half">
+      <div><b>1. Bet on players over schedules.</b><p class="muted">Looking ahead 1–10 weeks, a player's own scoring so far predicts future weeks far better than how soft his opponent has looked (WR ${c2(R.decay.WR[4].talent_corr)} vs ${c2(R.decay.WR[4].matchup_corr)} five weeks out; QB ${c2(R.decay.QB[4].talent_corr)} vs ${c2(R.decay.QB[4].matchup_corr)}).</p></div>
+      <div><b>2. Matchups matter mostly this week, mostly for QBs.</b><p class="muted">Vegas's view of this week's matchup is worth about ${c2(v?.QB?.pts_per_implied_pt)} QB points per point of implied total. For RB/WR/TE, both Vegas and defense-vs-position move scoring by under ~0.12 per point.</p></div>
+      <div><b>3. Any one week is mostly luck.</b><p class="muted">Even Sleeper's projection made that week explains ${Math.round(acc.QB.r2 * 100)}% (QB) to ${Math.round(acc.RB.r2 * 100)}% (RB) of a single game. Average miss: ${acc.WR.mae.toFixed(1)} points.</p></div>
+      <div><b>4. Volume ≈ points for spotting who'll be good later.</b><p class="muted">Early-season opportunities (targets + carries) predict playoff-week scoring about as well as early points (WR ${c2(e.WR.early_opportunities)} vs ${c2(e.WR.early_ppg)}); snap share alone is weak (${c2(e.WR.early_snap_share)}).</p></div>
+    </div></div>
+  <div class="card" style="margin-top:14px"><h2>How fast matchup value fades <small>correlation with points h weeks after the "as of" week (weeks 4–8)</small></h2>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">${POSS.map((p) => `<div><div class="muted" style="font-size:12.5px">${p}</div>${decayChart(p)}</div>`).join('')}</div></div>
+  <div class="grid half" style="margin-top:14px">
+    <div class="card"><h2>Week-of projection accuracy</h2><table>
+      <tr><th class="l">Pos</th><th>Games</th><th>Corr</th><th>Explains</th><th>Avg miss</th><th>Bias</th></tr>
+      ${POSS.map((p) => `<tr><td class="l">${p}</td><td>${acc[p].n.toLocaleString()}</td><td>${c2(acc[p].corr)}</td><td>${Math.round(acc[p].r2 * 100)}%</td><td>${acc[p].mae.toFixed(1)}</td><td class="${cls(acc[p].bias, 0.3)}">${sgn(acc[p].bias)}</td></tr>`).join('')}</table>
+      <p class="faint" style="font-size:12px">Bias = actual minus projected on average. Negative means Sleeper projects a bit high.</p></div>
+    <div class="card"><h2>This week's matchup: Vegas vs defense-vs-position <small>beyond the player's own average</small></h2><table>
+      <tr><th class="l">Pos</th><th>Vegas corr</th><th>pts / implied pt</th><th>DvP corr</th><th>pts / DvP pt</th></tr>
+      ${v ? POSS.map((p) => `<tr><td class="l">${p}</td><td>${c2(v[p].implied_matchup_corr)}</td><td>${c2(v[p].pts_per_implied_pt)}</td><td>${c2(v[p].dvp_corr)}</td><td>${c2(v[p].pts_per_dvp_pt)}</td></tr>`).join('') : '<tr><td>no Vegas data</td></tr>'}</table>
+      <p class="faint" style="font-size:12px">Vegas matchup = this week's implied team total minus the team's average so far.</p></div>
+  </div>
+  <div class="grid half" style="margin-top:14px">
+    <div class="card"><h2>Which early stat predicts the fantasy playoffs <small>weeks 1–7 vs weeks 15–17</small></h2><table>
+      <tr><th class="l">Pos</th><th>Players</th><th>Points</th><th>Opportunities</th><th>Snap share</th></tr>
+      ${POSS.map((p) => `<tr><td class="l">${p}</td><td>${e[p].n}</td><td>${c2(e[p].early_ppg)}</td><td>${c2(e[p].early_opportunities)}</td><td>${c2(e[p].early_snap_share)}</td></tr>`).join('')}</table></div>
+    <div class="card"><h2>Does recent form beat the projection? <small>best blend of week-of projection and last-3 average</small></h2><table>
+      <tr><th class="l">Pos</th><th>Weight on projection</th><th>Weight on last 3</th><th>Corr: projection</th><th>Corr: blend</th></tr>
+      ${POSS.map((p) => `<tr><td class="l">${p}</td><td>${c2(fm[p].weight_projection)}</td><td>${c2(fm[p].weight_last3)}</td><td>${c2(fm[p].corr_projection)}</td><td>${c2(fm[p].corr_blend)}</td></tr>`).join('')}</table>
+      <p class="faint" style="font-size:12px">Recent form adds little on top of Sleeper's projection, which already updates weekly. The model's form factor leans harder than this. See decision #1 below.</p></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h2>Model roadmap <small>decisions and next studies</small></h2>
+    <table>
+      <tr><th class="l">#</th><th class="l">Item</th><th class="l">Evidence</th><th class="l">Status</th></tr>
+      <tr><td class="l">1</td><td class="l" style="white-space:normal"><b>Tone down the recent-form factor</b> (currently moves a projection ±40–50%).</td><td class="l" style="white-space:normal">Last-3 average earns only ~${c2(fm.WR.weight_last3)}–${c2(fm.TE.weight_last3)} weight beyond the projection for RB/WR/TE, ${c2(fm.QB.weight_last3)} for QB.</td><td class="l"><span class="pill act">your call</span></td></tr>
+      <tr><td class="l">2</td><td class="l" style="white-space:normal">Fade far-off matchups toward the player's average.</td><td class="l" style="white-space:normal">Matchup signal ≈ 0 beyond next week except a little at QB.</td><td class="l"><span class="pill good">done</span></td></tr>
+      <tr><td class="l">3</td><td class="l" style="white-space:normal">Use Vegas (implied totals) for this week's QB and DEF decisions.</td><td class="l" style="white-space:normal">Vegas matchup beats DvP at QB.</td><td class="l"><span class="pill">next</span></td></tr>
+      <tr><td class="l">4</td><td class="l" style="white-space:normal">Add usage (target and carry share, routes) from nflverse as a talent signal.</td><td class="l" style="white-space:normal">Opportunities predict playoffs as well as points with less noise.</td><td class="l"><span class="pill">next</span></td></tr>
+      <tr><td class="l">5</td><td class="l" style="white-space:normal">Calibrate weekly variance (SD) by position from history instead of fixed guesses.</td><td class="l" style="white-space:normal">Avg miss 5–6 pts. Matters for win probabilities and the variance strategy against BooberEats.</td><td class="l"><span class="pill">next</span></td></tr>
+      <tr><td class="l">6</td><td class="l" style="white-space:normal">Injury rates by position and age → value of depth.</td><td class="l" style="white-space:normal">Needs games-missed history (nflverse injuries).</td><td class="l"><span class="pill">later</span></td></tr>
+      <tr><td class="l">7</td><td class="l" style="white-space:normal">Touchdown-luck regression and QB/WR stack correlation.</td><td class="l" style="white-space:normal">For trade timing and playoff ceiling.</td><td class="l"><span class="pill">later</span></td></tr>
+    </table>
+    <p class="faint" style="font-size:12px">Reproduce: <code>./tools/fetch_history.sh 2018 … 2025</code>, then <code>python3 tools/research.py</code>.</p></div>`;
+}
+
 // ------------------------------------------------------------ events
 function afterRender(tab) {
   const arg = location.hash.split('/')[1];
@@ -591,6 +726,13 @@ document.addEventListener('click', (e) => {
   if (e.target.id === 'run-trade') { e.target.textContent = 'Simulating…'; setTimeout(() => { T.result = M.evalTrade(S, ME.rid, T.partner, T.give, T.get); route(); }, 20); }
   if (e.target.id === 'clear-trade') { Object.assign(T, { give: [], get: [], result: null }); route(); }
   if (e.target.id === 'find-moves') { runMoveSearch(); return; }
+  if (e.target.id === 'run-all-sc') { runAllScenarios(); return; }
+  const rs = e.target.closest('[data-runsc]'); if (rs) { const k = rs.dataset.runsc; const sc = k[0] === 'p' ? SC.presets[+k.slice(1)] : savedScenarios()[+k.slice(1)]; rs.textContent = '…'; setTimeout(() => { runOne(k, sc); route(); }, 20); return; }
+  const ds = e.target.closest('[data-delsc]'); if (ds) { const v = savedScenarios(); v.splice(+ds.dataset.delsc - 1, 1); saveScenarios(v); Object.keys(SC.results).filter((k) => k[0] === 'm').forEach((k) => delete SC.results[k]); route(); return; }
+  const dst = e.target.closest('[data-dropstep]'); if (dst) { SC.draft.splice(+dst.dataset.dropstep, 1); route(); return; }
+  const sr = e.target.closest('[data-scrm]'); if (sr) { const [side, id] = sr.dataset.scrm.split(':'); SC.step[side] = SC.step[side].filter((x) => x !== id); route(); return; }
+  if (e.target.id === 'sc-addstep') { const st = SC.step; SC.draft.push({ partner: st.partner === 'FA' ? 'FA' : team(+st.partner).owner, give: st.give.map((id) => P(id).name), get: st.get.map((id) => P(id).name) }); SC.step = { partner: '', give: [], get: [] }; route(); return; }
+  if (e.target.id === 'sc-save') { const name = $('#sc-name')?.value?.trim() || `My scenario ${savedScenarios().length + 1}`; const v = savedScenarios(); v.push({ name, steps: SC.draft }); saveScenarios(v); SC.draft = []; const k = 'm' + (v.length - 1); setTimeout(() => { runOne(k, v[v.length - 1]); route(); }, 20); route(); return; }
   const sm = e.target.closest('[data-simmove]'); if (sm) { sm.textContent = '…'; setTimeout(() => simMove(+sm.dataset.simmove), 20); return; }
   const om = e.target.closest('[data-openmove]');
   if (om) { const r = MOVES.rows[+om.dataset.openmove]; Object.assign(T, { partner: r.partner, give: [...r.give], get: [...r.get], result: null }); location.hash = 'trade'; return; }
@@ -599,6 +741,9 @@ document.addEventListener('click', (e) => {
 document.addEventListener('change', (e) => {
   if (e.target.id === 'give-sel' && e.target.value) { T.give.push(e.target.value); T.result = null; route(); }
   if (e.target.id === 'get-sel' && e.target.value) { T.get.push(e.target.value); T.result = null; route(); }
+  if (e.target.id === 'sc-partner') { SC.step = { partner: e.target.value, give: SC.step.give, get: [] }; route(); return; }
+  if (e.target.id === 'sc-give' && e.target.value) { SC.step.give.push(e.target.value); route(); return; }
+  if (e.target.id === 'sc-get' && e.target.value) { SC.step.get.push(e.target.value); route(); return; }
   if (e.target.id === 'moves-realistic') { MOVES.realistic = e.target.checked; const c = $('#moves-card'); if (c) c.outerHTML = titleMovesCard(); return; }
   if (e.target.id === 'partner-sel') { T.partner = Number(e.target.value) || null; T.get = []; T.result = null; route(); }
 });

@@ -2,8 +2,8 @@
 // from the sources (rosters, records, live scores, this week's projections and injury tags,
 // trending adds, odds, news, transactions). Season-long projections and stats stay baked.
 import { url, softJSON, scorer, buildTeams, parseGames, parseNews, parseTransactions, trendMap,
-  compact, diffChanges } from './sources.js?v=1792619727';
-import { formFactor } from './model.js?v=1792619727';
+  compact, diffChanges } from './sources.js?v=1792624809';
+import { formFactor } from './model.js?v=1792624809';
 
 const KEY = 'fflab-last-seen';
 const LOG = 'fflab-change-log';
