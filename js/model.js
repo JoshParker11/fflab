@@ -43,6 +43,24 @@ function damp(p, w, act, proj) {
 }
 
 // Expected league points and SD for player p in week w, seen from week cur.
+// How much of a future week's matchup adjustment to keep. Backtest 2023–25 (tools/backtest.py):
+// from Week 7, early-season "soft defense" signals barely predicted Weeks 15–17 for RB/WR/TE
+// (corr ≈ 0) and only weakly for QBs (0.17), while player scoring carried over (0.35–0.56).
+// So this week and next keep the full matchup; after that it fades toward the player's
+// own average projection, leaving QBs ~30% and everyone else ~10% of the matchup effect.
+const MATCHUP_FLOOR = { QB: 0.3, K: 0.2, DEF: 0.2 };
+function matchupWeight(pos, ahead) {
+  if (ahead <= 1) return 1;
+  return Math.max(MATCHUP_FLOOR[pos] ?? 0.1, 0.55 ** (ahead - 1));
+}
+function avgProj(p, cur) {
+  if (p._avg?.cur === cur) return p._avg.v;
+  const v = (p.proj || []).slice(cur).filter((x) => x > 0);
+  const a = v.length ? v.reduce((t, x) => t + x, 0) / v.length : 0;
+  Object.defineProperty(p, '_avg', { value: { cur, v: a }, enumerable: false, configurable: true });
+  return a;
+}
+
 export function weekDist(p, w, cur, live) {
   if (w === cur && live) {
     const g = live.games?.[p.team];
@@ -50,6 +68,8 @@ export function weekDist(p, w, cur, live) {
   }
   let mean = p.proj?.[w] ?? 0;
   if (!mean) return { mean: 0, sd: 0 };
+  const avg = avgProj(p, cur);
+  if (avg) mean = avg + (mean - avg) * matchupWeight(p.pos, w - cur);
   const f = p.form ?? 1;
   mean *= 1 + (f - 1) * FORM_DECAY ** (w - cur);
   if (w === cur) {
