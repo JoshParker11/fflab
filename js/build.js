@@ -1,8 +1,8 @@
 // Builds the full league snapshot from public sources. Runs in Node (tools/snapshot.mjs) and in the
 // browser ("Refresh all" on the site), so nothing depends on GitHub Actions.
 import { LEAGUE, POS, url, getJSON, softJSON, scorer, buildTeams, parseGames, parseNews,
-  parseTransactions, trendMap } from './sources.js?v=1792645849';
-import { formFactor } from './model.js?v=1792645849';
+  parseTransactions, trendMap } from './sources.js?v=1792647822';
+import { formFactor } from './model.js?v=1792647822';
 
 const NFLV = { LA: 'LAR', STL: 'LAR', SD: 'LAC', OAK: 'LV', WSH: 'WAS', JAC: 'JAX' };
 const team = (t) => NFLV[t] || t;

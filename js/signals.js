@@ -2,7 +2,7 @@
 // Usage trends compare a player's last 2 games with his games before that. "Expected points"
 // = opportunities × what an opportunity is worth at his position this season, so points far
 // above or below it flag luck (touchdowns, big plays) rather than role.
-import { weekDist } from './model.js?v=1792645849';
+import { weekDist } from './model.js?v=1792647822';
 
 const avg = (v) => (v.length ? v.reduce((a, b) => a + b, 0) / v.length : null);
 const SKILL = ['QB', 'RB', 'WR', 'TE'];

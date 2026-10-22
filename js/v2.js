@@ -1,11 +1,11 @@
 // FF Lab v2: three pages — Overview (power rankings by sector, trade fits, this week),
 // Signals (what's changing, for you and around the league), Workshop (what-if scratchpad).
-import * as M from './model.js?v=1792645849';
-import { lines, spark } from './charts.js?v=1792645849';
-import { overlay } from './live.js?v=1792645849';
-import { computeSignals } from './signals.js?v=1792645849';
-import { buildSnapshot } from './build.js?v=1792645849';
-import { compact, diffChanges } from './sources.js?v=1792645849';
+import * as M from './model.js?v=1792647822';
+import { lines, spark } from './charts.js?v=1792647822';
+import { overlay } from './live.js?v=1792647822';
+import { computeSignals } from './signals.js?v=1792647822';
+import { buildSnapshot } from './build.js?v=1792647822';
+import { compact, diffChanges } from './sources.js?v=1792647822';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -107,12 +107,17 @@ function sectors() {
       const bench = lu.bench.filter((x) => ['RB', 'WR', 'TE'].includes(x.p.pos)).slice(0, 3);
       for (const x of bench) { acc.Bench.v += x.mean / weeks.length; acc.Bench.players[x.p.name] = (acc.Bench.players[x.p.name] || 0) + x.mean / weeks.length; }
     }
-    const power = Object.entries(acc).filter(([k]) => k !== 'Bench').reduce((s, [, x]) => s + x.v, 0);
-    data[t.rid] = { ...acc, power };
+    // Power = projected starting points without K/DEF (anyone can stream those off waivers);
+    // K/DEF stays as its own ranked column.
+    const power = Object.entries(acc).filter(([k]) => k !== 'Bench' && k !== 'K/DEF').reduce((s, [, x]) => s + x.v, 0);
+    // Trade value = market value (FantasyCalc) of the whole roster's QB/RB/WR/TE, like Flock's portfolio view
+    const vals = t.players.map(P).filter((p) => p && ['QB', 'RB', 'WR', 'TE'].includes(p.pos) && p.fc).sort((a, b) => b.fc - a.fc);
+    data[t.rid] = { ...acc, power, value: vals.reduce((s, p) => s + p.fc, 0), valuePlayers: vals };
   }
   const rank = (k) => { const order = [...S.teams].sort((a, b) => data[b.rid][k].v - data[a.rid][k].v); order.forEach((t, i) => (data[t.rid][k].rank = i + 1)); };
   SECTORS.forEach(([k]) => rank(k));
   [...S.teams].sort((a, b) => data[b.rid].power - data[a.rid].power).forEach((t, i) => (data[t.rid].powerRank = i + 1));
+  [...S.teams].sort((a, b) => data[b.rid].value - data[a.rid].value).forEach((t, i) => (data[t.rid].valueRank = i + 1));
   return (SECT = data);
 }
 const rankColor = (r, n = 12) => { const x = (r - 1) / (n - 1); return `background:color-mix(in srgb, ${x < 0.5 ? 'var(--good)' : 'var(--bad)'} ${Math.round(Math.abs(x - 0.5) * 2 * 55)}%, transparent)`; };
@@ -144,8 +149,11 @@ function tradeFits() {
 function renderOverview() {
   const o = SIM.odds[ME.rid], D = sectors();
   const mine = SIM.dist[S.week][ME.rid], theirs = OPP && SIM.dist[S.week][OPP.rid], wp = OPP ? M.winProb(mine, theirs) : null;
-  const rows = [...S.teams].sort((a, b) => D[a.rid].powerRank - D[b.rid].powerRank);
-  const pmax = Math.max(...rows.map((t) => D[t.rid].power));
+  const byValue = OV.sort === 'value';
+  const rows = [...S.teams].sort((a, b) => (byValue ? D[a.rid].valueRank - D[b.rid].valueRank : D[a.rid].powerRank - D[b.rid].powerRank));
+  const pmax = Math.max(...rows.map((t) => D[t.rid].power)), vmax = Math.max(...rows.map((t) => D[t.rid].value));
+  const valTip = (t) => `<b>${esc(t.owner)} · trade value</b> <span class="faint">#${D[t.rid].valueRank} of 12</span><table>${D[t.rid].valuePlayers.slice(0, 8).map((p) => `<tr><td>${esc(p.name)}</td><td style="text-align:right">${(p.fc / 1000).toFixed(1)}k</td></tr>`).join('')}</table><div class="faint">FantasyCalc redraft values, whole roster (QB/RB/WR/TE)</div>`;
+  const bar = (v, max, color) => `<div class="row" style="gap:6px"><div style="flex:1;height:8px;background:var(--panel2);border-radius:4px"><div style="height:8px;border-radius:4px;background:${color};width:${(v / max) * 100}%"></div></div>`;
   const cellTip = (t, k) => { const x = D[t.rid][k]; const list = Object.entries(x.players).sort((a, b) => b[1] - a[1]).map(([n, v]) => `<tr><td>${esc(n)}</td><td style="text-align:right">${v.toFixed(1)}</td></tr>`).join('');
     return `<b>${esc(t.owner)} · ${k}</b> <span class="faint">#${x.rank} of 12</span><table>${list}<tr><td><b>${k === 'Bench' ? 'top-3 depth' : 'per week'}</b></td><td style="text-align:right"><b>${x.v.toFixed(1)}</b></td></tr></table><div class="faint">avg of the next 4 weeks' best lineups</div>`; };
   const fits = tradeFits();
@@ -159,13 +167,17 @@ function renderOverview() {
     <div class="kpi"><div class="v">${pct(o.bye)}</div><div class="k">top-2 bye</div></div>
     <div class="kpi"><div class="v">${pct(o.title)}</div><div class="k">title</div></div>
   </div>
-  <div class="card" style="margin-top:14px"><h2>Power rankings <small>projected starters, next 4 weeks · hover any cell for the players</small></h2><div class="scroll">
-    <table><tr><th class="l">#</th><th class="l">Team</th><th class="l">Power</th>${SECTORS.map(([k]) => `<th>${k}</th>`).join('')}<th>Playoffs</th><th>Title</th></tr>
-    ${rows.map((t) => { const d = D[t.rid]; return `<tr class="${t.me ? 'me' : ''}"><td class="l">${d.powerRank}</td><td class="l">${esc(t.owner)}<span class="sub">${t.wins}-${t.losses}</span></td>
-      <td class="l" style="min-width:110px"><div class="row" style="gap:6px"><div style="flex:1;height:8px;background:var(--panel2);border-radius:4px"><div style="height:8px;border-radius:4px;background:var(--info);width:${(d.power / pmax) * 100}%"></div></div><span>${d.power.toFixed(0)}</span></div></td>
+  <div class="card" style="margin-top:14px"><h2>Power rankings <small>hover any cell for the players</small></h2>
+    <div class="row" style="margin-bottom:8px;gap:8px;flex-wrap:wrap"><div class="seg"><button data-ovsort="points" class="${byValue ? '' : 'on'}">Rank by points</button><button data-ovsort="value" class="${byValue ? 'on' : ''}">Rank by trade value</button></div>
+      <span class="faint" style="font-size:12px">${byValue ? 'Market value of each whole roster (like Flock): who has the most to trade with.' : 'Projected starting points per week over the next 4 weeks, without K/DEF (streamable).'}</span></div>
+    <div class="scroll">
+    <table><tr><th class="l">#</th><th class="l">Team</th><th class="l">Points</th><th class="l">Trade value</th>${SECTORS.map(([k]) => `<th>${k}</th>`).join('')}<th>Playoffs</th><th>Title</th></tr>
+    ${rows.map((t) => { const d = D[t.rid]; return `<tr class="${t.me ? 'me' : ''}"><td class="l">${byValue ? d.valueRank : d.powerRank}</td><td class="l">${esc(t.owner)}<span class="sub">${t.wins}-${t.losses}</span></td>
+      <td class="l" style="min-width:100px">${bar(d.power, pmax, 'var(--info)')}<span>${d.power.toFixed(0)}</span><span class="faint" style="font-size:11px">#${d.powerRank}</span></div></td>
+      <td class="l" style="min-width:100px">${bar(d.value, vmax, 'var(--act)')}<span ${tipAttr(valTip(t))}>${(d.value / 1000).toFixed(1)}k</span><span class="faint" style="font-size:11px">#${d.valueRank}</span></div></td>
       ${SECTORS.map(([k]) => `<td><span class="rankcell" style="${rankColor(d[k].rank)}" ${tipAttr(cellTip(t, k))}>${d[k].rank}</span></td>`).join('')}
       <td>${pct(SIM.odds[t.rid].playoffs)}</td><td><b>${pct(SIM.odds[t.rid].title)}</b></td></tr>`; }).join('')}
-    </table></div><p class="faint" style="font-size:12px">Numbers are ranks (1 = best of 12). Bench = your 3 best non-starting RB/WR/TE, i.e. injury and bye cover.</p></div>
+    </table></div><p class="faint" style="font-size:12px">Sector numbers are ranks (1 = best of 12). Points leave out K/DEF, which has its own column. Bench = your 3 best non-starting RB/WR/TE (injury and bye cover). Trade value = FantasyCalc market values of everyone on the roster.</p></div>
   <div class="grid two" style="margin-top:14px">
     <div class="card"><h2>Trade fits <small>teams strong where you're thin, or thin where you're deep</small></h2>
       <p class="muted" style="font-size:13px;margin-top:0">You: strongest at <b>${fits.myStrong.join(', ') || '—'}</b>, thinnest at <b>${fits.myWeak.join(', ') || '—'}</b>.</p>
@@ -188,6 +200,7 @@ function renderOverview() {
 const SIG_TYPES = { 'role-up': ['Role ↑', 'var(--good)'], 'role-down': ['Role ↓', 'var(--bad)'], 'buy-low': ['Buy low', 'var(--info)'], 'sell-high': ['Sell high', 'var(--act)'],
   gem: ['Waiver gem', 'var(--good)'], injury: ['Injury', 'var(--bad)'], proj: ['Projection', 'var(--info)'], trend: ['Trending', 'var(--act)'], news: ['News', 'var(--faint)'] };
 const SV = { who: 'all', type: 'all' };
+const OV = { sort: 'points' };
 function sigRow(s) {
   const [label, color] = SIG_TYPES[s.type];
   const owner = s.tag === 'mine' ? '<span class="pill act">your team</span>' : s.tag === 'opponent' ? '<span class="pill bad">this week\'s opponent</span>' : s.tag === 'free agent' ? '<span class="pill good">free agent</span>' : `<span class="pill">${esc(s.owner)}</span>`;
@@ -302,6 +315,7 @@ document.addEventListener('click', async (e) => {
   const q = (sel) => e.target.closest(sel);
   let x;
   if ((x = q('nav button'))) { location.hash = x.dataset.tab; return; }
+  if ((x = q('[data-ovsort]'))) { OV.sort = x.dataset.ovsort; route(); return; }
   if ((x = q('[data-sw]'))) { SV.who = x.dataset.sw; route(); return; }
   if ((x = q('[data-st]'))) { SV.type = x.dataset.st; route(); return; }
   if ((x = q('[data-fit]'))) { const t = team(+x.dataset.fit); WS.draft = { ...WS.draft, kind: 'trade', partner: t.owner, give: [], get: [] }; location.hash = 'workshop'; return; }
