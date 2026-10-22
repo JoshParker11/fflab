@@ -1,11 +1,11 @@
 // FF Lab v2: three pages — Overview (power rankings by sector, trade fits, this week),
 // Signals (what's changing, for you and around the league), Workshop (what-if scratchpad).
-import * as M from './model.js?v=1792647822';
-import { lines, spark } from './charts.js?v=1792647822';
-import { overlay } from './live.js?v=1792647822';
-import { computeSignals } from './signals.js?v=1792647822';
-import { buildSnapshot } from './build.js?v=1792647822';
-import { compact, diffChanges } from './sources.js?v=1792647822';
+import * as M from './model.js?v=1792654421';
+import { lines, spark } from './charts.js?v=1792654421';
+import { overlay } from './live.js?v=1792654421';
+import { computeSignals } from './signals.js?v=1792654421';
+import { buildSnapshot } from './build.js?v=1792654421';
+import { compact, diffChanges } from './sources.js?v=1792654421';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -84,7 +84,7 @@ async function load({ rebuild = false } = {}) {
   OPP = g && team(g.find((r) => r !== ME.rid));
   SIM = M.simulate(S, { n: 4000, seed: 11 });
   SIGNALS = computeSignals(S, { me: ME.rid, oppRid: OPP?.rid, changes: CHANGES });
-  SECT = null;
+  SECT = null; METRIC_CACHE = null;
   stamp.textContent = `Week ${S.week} · data ${ago(S.generated)} old${live.ok ? ' · live' : ''}`;
 }
 
@@ -302,8 +302,121 @@ function summaryText() {
     r ? `Title ${pct(r.me.title[0])} → ${pct(r.me.title[1])}, bye ${pct(r.me.bye[0])} → ${pct(r.me.bye[1])}, title weeks ${sgn(r.me.w16)}/${sgn(r.me.w17)} pts` : ''].join('\n');
 }
 
+
+// ---------------------------------------------------------------- charts
+// Usage metrics from season-to-date box scores. WOPR = 1.5 × target share + 0.7 × air-yard share.
+// Expected points = opportunities (targets + carries; QBs add passes) × what an opportunity is worth
+// at the position this season, so "points over expected" ≈ touchdown/big-play luck.
+const METRICS = {
+  wopr: ['WOPR', (m) => m.wopr, 2], tshare: ['Target share', (m) => m.tshare, 2, true], ayshare: ['Air-yard share', (m) => m.ayshare, 2, true],
+  adot: ['aDOT (air yards / target)', (m) => m.adot, 1], tgt: ['Targets / game', (m) => m.tgt, 1], touch: ['Touches / game', (m) => m.touch, 1],
+  opp: ['Opportunities / game', (m) => m.opp, 1], cshare: ['Carry share', (m) => m.cshare, 2, true], snap: ['Snap %', (m) => m.snap, 0],
+  rz: ['Red-zone opportunities / game', (m) => m.rz, 1], ppg: ['PPR points / game (league scoring)', (m) => m.ppg, 1],
+  last3: ['Last-3 points / game', (m) => m.last3, 1], xfp: ['Expected points / game', (m) => m.xfp, 1], poe: ['Points over expected / game', (m) => m.poe, 1],
+  proj: ['Projected / game, next 4 weeks', (m) => m.proj, 1], value: ['Trade value (FantasyCalc, k)', (m) => m.value, 1],
+};
+const CV = { x: 'wopr', y: 'ppg', pos: 'WR', minG: 3, hi: '', scope: 'all', pin: null };
+const PRESETS = [['WOPR vs points (WR)', { x: 'wopr', y: 'ppg', pos: 'WR' }], ['Opportunities vs points (RB)', { x: 'opp', y: 'ppg', pos: 'RB' }],
+  ['Target share vs points (TE)', { x: 'tshare', y: 'ppg', pos: 'TE' }], ['Expected vs actual (TD luck)', { x: 'xfp', y: 'ppg', pos: 'ALL' }],
+  ['Projection vs trade value (buy signal)', { x: 'value', y: 'proj', pos: 'ALL' }], ['Snap % vs opportunities', { x: 'snap', y: 'opp', pos: 'ALL' }]];
+let METRIC_CACHE = null;
+function playerMetrics() {
+  if (METRIC_CACHE) return METRIC_CACHE;
+  const rate = {}, out = [];
+  for (const pos of ['QB', 'RB', 'WR', 'TE']) {
+    let pts = 0, opp = 0;
+    for (const p of Object.values(S.players)) if (p.pos === pos) for (let w = 1; w < p.use.length; w++) { const u = p.use[w]; if (u && p.act[w] != null) { pts += p.act[w]; opp += u.tgt + u.ru + (pos === 'QB' ? u.pa : 0); } }
+    rate[pos] = opp ? pts / opp : 0;
+  }
+  for (const p of Object.values(S.players)) {
+    if (!['QB', 'RB', 'WR', 'TE'].includes(p.pos)) continue;
+    const W = []; for (let w = 1; w < p.use.length; w++) if (p.use[w] && p.act[w] != null) W.push(w);
+    if (!W.length) continue;
+    let tgt = 0, ru = 0, rec = 0, ay = 0, rz = 0, pa = 0, pts = 0, Tt = 0, Ta = 0, Tr = 0, sn = 0, sc = 0;
+    for (const w of W) { const u = p.use[w], T = S.teamUse?.[u.team || p.team]?.[w] || {}; tgt += u.tgt; ru += u.ru; rec += u.rec; ay += Math.max(0, u.ay); rz += u.rz; pa += u.pa; pts += p.act[w]; Tt += T.tgt || 0; Ta += T.ay || 0; Tr += T.ru || 0; if (u.snp != null) { sn += u.snp; sc++; } }
+    const g = W.length, ts = Tt ? tgt / Tt : 0, ays = Ta ? ay / Ta : 0, opp = (tgt + ru + (p.pos === 'QB' ? pa : 0)) / g;
+    const l3 = W.slice(-3).map((w) => p.act[w]);
+    const proj4 = [0, 1, 2, 3].map((i) => M.projParts(p, S.week + i, S.week, S.live).mean).filter((x) => x > 0);
+    out.push({ p, g, ppg: pts / g, tgt: tgt / g, touch: (rec + ru) / g, opp, rz: rz / g, tshare: ts, ayshare: ays, wopr: 1.5 * ts + 0.7 * ays, cshare: Tr ? ru / Tr : 0,
+      adot: tgt ? ay / tgt : 0, snap: sc ? sn / sc : 0, xfp: opp * rate[p.pos], poe: pts / g - opp * rate[p.pos], last3: l3.reduce((a, b) => a + b, 0) / l3.length,
+      proj: proj4.length ? proj4.reduce((a, b) => a + b, 0) / proj4.length : 0, value: (p.fc || 0) / 1000 });
+  }
+  return (METRIC_CACHE = out);
+}
+const LOGO = (t) => t ? `https://a.espncdn.com/i/teamlogos/nfl/500/${({ WAS: 'wsh' })[t] || t.toLowerCase()}.png` : '';
+function renderCharts() {
+  const [xl, xf, xd, xpct] = METRICS[CV.x], [yl, yf, yd, ypct] = METRICS[CV.y];
+  const fmt = (v, d, p) => (p ? `${(v * 100).toFixed(0)}%` : v.toFixed(d));
+  const rows = playerMetrics().filter((m) => (CV.pos === 'ALL' || m.p.pos === CV.pos) && m.g >= CV.minG && (CV.scope === 'all' || (CV.scope === 'league' ? m.p.own : CV.scope === 'mine' ? m.p.own === ME.rid : !m.p.own)))
+    .filter((m) => Number.isFinite(xf(m)) && Number.isFinite(yf(m)) && (xf(m) > 0 || yf(m) > 0));
+  if (rows.length < 3) return `${chartControls()}<div class="card"><div class="empty">Not enough players for this filter.</div></div>`;
+  const X = rows.map(xf), Y = rows.map(yf), n = X.length;
+  const mx = X.reduce((a, b) => a + b, 0) / n, my = Y.reduce((a, b) => a + b, 0) / n;
+  const sxy = X.reduce((t, x, i) => t + (x - mx) * (Y[i] - my), 0), sxx = X.reduce((t, x) => t + (x - mx) ** 2, 0), syy = Y.reduce((t, y) => t + (y - my) ** 2, 0);
+  const b = sxx ? sxy / sxx : 0, a = my - b * mx, r = sxx && syy ? sxy / Math.sqrt(sxx * syy) : 0;
+  const W = 900, H = 560, pad = { l: 56, r: 20, t: 24, b: 44 };
+  const x0 = Math.min(...X), x1 = Math.max(...X), y0 = Math.min(0, Math.min(...Y)), y1 = Math.max(...Y);
+  const px = (v) => pad.l + ((v - x0) / ((x1 - x0) || 1)) * (W - pad.l - pad.r), py = (v) => H - pad.b - ((v - y0) / ((y1 - y0) || 1)) * (H - pad.t - pad.b);
+  const hi = CV.hi.trim().toLowerCase();
+  let g = '';
+  for (let k = 0; k <= 4; k++) { const vx = x0 + ((x1 - x0) * k) / 4, vy = y0 + ((y1 - y0) * k) / 4;
+    g += `<line class="axis" x1="${px(vx)}" x2="${px(vx)}" y1="${pad.t}" y2="${H - pad.b}" stroke-dasharray="2 4"/><text x="${px(vx)}" y="${H - pad.b + 16}" text-anchor="middle">${fmt(vx, xd, xpct)}</text>`;
+    g += `<line class="axis" x1="${pad.l}" x2="${W - pad.r}" y1="${py(vy)}" y2="${py(vy)}" stroke-dasharray="2 4"/><text x="${pad.l - 6}" y="${py(vy) + 4}" text-anchor="end">${fmt(vy, yd, ypct)}</text>`; }
+  g += `<line x1="${px(mx)}" x2="${px(mx)}" y1="${pad.t}" y2="${H - pad.b}" stroke="var(--faint)" stroke-dasharray="4 4"/><text x="${px(mx) + 4}" y="${pad.t + 10}">league avg ${fmt(mx, xd, xpct)}</text>`;
+  g += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${py(my)}" y2="${py(my)}" stroke="var(--faint)" stroke-dasharray="4 4"/><text x="${W - pad.r - 4}" y="${py(my) - 5}" text-anchor="end">league avg ${fmt(my, yd, ypct)}</text>`;
+  g += `<line x1="${px(x0)}" y1="${py(a + b * x0)}" x2="${px(x1)}" y2="${py(a + b * x1)}" stroke="var(--text)" stroke-opacity=".55" stroke-width="1.5"/><text x="${W - pad.r}" y="${pad.t + 10}" text-anchor="end">R = ${r.toFixed(2)}</text>`;
+  const labelSet = new Set([...rows].sort((p, q) => yf(q) - yf(p)).slice(0, 45).map((m) => m.p.id));
+  for (const m of rows) {
+    const x = px(xf(m)), y = py(yf(m)), exp = a + b * xf(m), d = yf(m) - exp;
+    const isHi = hi && m.p.name.toLowerCase().includes(hi), mine = m.p.own === ME.rid, dim = hi && !isHi;
+    const ring = isHi ? 'var(--bad)' : mine ? 'var(--act)' : !m.p.own ? 'var(--good)' : 'none';
+    const tip = `<b>${esc(m.p.name)}</b> <span class="faint">${m.p.pos} · ${esc(m.p.team || '')} · ${m.p.own === ME.rid ? 'your team' : m.p.own ? esc(team(m.p.own).owner) : 'free agent'}</span><table>
+      <tr><td>${esc(xl)}</td><td style="text-align:right">${fmt(xf(m), xd + 1, xpct)}</td></tr><tr><td>${esc(yl)}</td><td style="text-align:right">${fmt(yf(m), yd + 1, ypct)}</td></tr>
+      <tr><td>trend expects</td><td style="text-align:right">${fmt(exp, yd + 1, ypct)}</td></tr><tr><td><b>${d >= 0 ? 'above' : 'below'} the trend</b></td><td style="text-align:right" class="${d >= 0 ? 'good' : 'bad'}"><b>${ypct ? `${d >= 0 ? '+' : ''}${(d * 100).toFixed(0)}%` : sgn(d)}</b></td></tr></table><div class="faint">${m.g} games · click for week-by-week</div>`;
+    g += `<g ${tipAttr(tip)} data-cpin="${m.p.id}" style="cursor:pointer;opacity:${dim ? 0.25 : 1}">${ring !== 'none' ? `<circle cx="${x}" cy="${y}" r="13" fill="none" stroke="${ring}" stroke-width="2.5"/>` : ''}
+      <circle cx="${x}" cy="${y}" r="10" fill="var(--panel2)"/><image href="${LOGO(m.p.team)}" x="${x - 10}" y="${y - 10}" width="20" height="20"/>
+      ${labelSet.has(m.p.id) || isHi || mine ? `<text x="${x}" y="${y - 14}" text-anchor="middle" style="font-weight:700;letter-spacing:.02em;fill:${isHi ? 'var(--bad)' : mine ? 'var(--act)' : 'var(--dim)'}">${esc(m.p.name.split(' ').slice(-1)[0].toUpperCase())}</text>` : ''}</g>`;
+  }
+  g += `<text x="${(W + pad.l) / 2}" y="${H - 6}" text-anchor="middle" style="font-weight:700">${esc(xl.toUpperCase())}</text><text x="14" y="${(H) / 2}" transform="rotate(-90 14 ${H / 2})" text-anchor="middle" style="font-weight:700">${esc(yl.toUpperCase())}</text>`;
+  const resid = rows.map((m) => ({ m, d: yf(m) - (a + b * xf(m)) })).sort((p, q) => q.d - p.d);
+  const listRow = ({ m, d }) => `<tr data-cpin="${m.p.id}" style="cursor:pointer"><td class="l">${esc(m.p.name)} <span class="faint">${m.p.pos}</span><span class="sub">${m.p.own === ME.rid ? 'your team' : m.p.own ? esc(team(m.p.own).owner) : 'free agent'}</span></td><td>${fmt(xf(m), xd, xpct)}</td><td>${fmt(yf(m), yd, ypct)}</td><td class="${d >= 0 ? 'good' : 'bad'}"><b>${ypct ? `${(d * 100).toFixed(0)}%` : sgn(d)}</b></td></tr>`;
+  const head = `<tr><th class="l">Player</th><th>${esc(METRICS[CV.x][0])}</th><th>${esc(METRICS[CV.y][0])}</th><th>vs trend</th></tr>`;
+  return `${chartControls()}
+  <div class="card"><h2>${esc(xl)} vs ${esc(yl)} <small>${n} ${CV.pos === 'ALL' ? 'players' : CV.pos + 's'} · ${S.season} · gold ring = yours, green = free agent · hover for details</small></h2>
+    <svg class="chart" viewBox="0 0 ${W} ${H}" style="background:var(--panel2);border-radius:10px">${g}</svg></div>
+  ${CV.pin ? pinCard() : ''}
+  <div class="grid half" style="margin-top:14px">
+    <div class="card"><h2>Furthest above the trend <small>outscoring the usage: regression risk / sell-high</small></h2><table>${head}${resid.slice(0, 10).map(listRow).join('')}</table></div>
+    <div class="card"><h2>Furthest below the trend <small>usage says more is coming: buy-low</small></h2><table>${head}${resid.slice(-10).reverse().map(listRow).join('')}</table></div>
+  </div>
+  <p class="faint" style="font-size:12px;margin-top:8px">Research basis (2018–25): volume beats efficiency. High-usage/low-efficiency players become league winners far more often than the reverse, and touchdown-heavy starts tend to regress. Read "below the trend" with strong usage as buy-low.</p>`;
+}
+function chartControls() {
+  const opts = (sel) => Object.entries(METRICS).map(([k, [l]]) => `<option value="${k}" ${k === sel ? 'selected' : ''}>${esc(l)}</option>`).join('');
+  return `<div class="card" style="margin-bottom:14px"><div class="row" style="flex-wrap:wrap;gap:8px">
+    <div class="seg">${['ALL', 'QB', 'RB', 'WR', 'TE'].map((p) => `<button data-cpos="${p}" class="${p === CV.pos ? 'on' : ''}">${p}</button>`).join('')}</div>
+    <select id="cx">${opts(CV.x)}</select><span class="faint">vs</span><select id="cy">${opts(CV.y)}</select>
+    <select id="cscope">${[['all', 'all players'], ['league', 'league rosters'], ['mine', 'my team'], ['fa', 'free agents']].map(([k, v]) => `<option value="${k}" ${k === CV.scope ? 'selected' : ''}>${v}</option>`).join('')}</select>
+    <label class="muted" style="font-size:13px">min games <input type="number" id="cming" value="${CV.minG}" min="1" max="10" style="width:52px"></label>
+    <input type="search" id="chi" placeholder="highlight player…" value="${esc(CV.hi)}" style="width:160px"></div>
+    <div class="chips2" style="margin:10px 0 0">${PRESETS.map(([l], i) => `<button data-cpre="${i}">${esc(l)}</button>`).join('')}</div></div>`;
+}
+function pinCard() {
+  const p = P(CV.pin); if (!p) return '';
+  const W = []; for (let w = 1; w < p.use.length; w++) if (p.use[w]) W.push(w);
+  const share = (w, k) => { const T = S.teamUse?.[p.use[w].team || p.team]?.[w]; return T?.[k] ? (k === 'ay' ? Math.max(0, p.use[w].ay) : p.use[w][k === 'tgt' ? 'tgt' : 'ru']) / T[k] * 100 : null; };
+  return `<div class="card" style="margin-top:14px"><h2>${esc(p.name)} <small>${p.pos} · ${esc(p.team || '')} · week by week · <a href="#charts" data-cunpin="1">close</a></small></h2>
+    <div class="grid half">
+      <div>${lines({ labels: W.map((w) => `W${w}`), height: 170, fmt: (v) => v.toFixed(0), series: [
+        { name: 'fantasy points', values: W.map((w) => p.act[w]), color: 'var(--act)' }, { name: 'targets + carries', values: W.map((w) => p.use[w].tgt + p.use[w].ru), color: 'var(--info)' }] })}</div>
+      <div>${lines({ labels: W.map((w) => `W${w}`), height: 170, fmt: (v) => `${v.toFixed(0)}%`, series: [
+        { name: 'snap %', values: W.map((w) => p.use[w].snp), color: 'var(--faint)' }, { name: 'target share', values: W.map((w) => share(w, 'tgt')), color: 'var(--good)' },
+        { name: 'air-yard share', values: W.map((w) => share(w, 'ay')), color: 'var(--bad)' }] })}</div>
+    </div></div>`;
+}
+
 // ---------------------------------------------------------------- routing + events
-const TABS = { overview: renderOverview, signals: renderSignals, workshop: renderWorkshop };
+const TABS = { overview: renderOverview, signals: renderSignals, workshop: renderWorkshop, charts: renderCharts };
 function route() {
   const tab = location.hash.slice(1) || 'overview';
   document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
@@ -315,6 +428,10 @@ document.addEventListener('click', async (e) => {
   const q = (sel) => e.target.closest(sel);
   let x;
   if ((x = q('nav button'))) { location.hash = x.dataset.tab; return; }
+  if ((x = q('[data-cpos]'))) { CV.pos = x.dataset.cpos; route(); return; }
+  if ((x = q('[data-cpre]'))) { Object.assign(CV, PRESETS[+x.dataset.cpre][1]); route(); return; }
+  if ((x = q('[data-cunpin]'))) { e.preventDefault(); CV.pin = null; route(); return; }
+  if ((x = q('[data-cpin]'))) { CV.pin = x.dataset.cpin; route(); return; }
   if ((x = q('[data-ovsort]'))) { OV.sort = x.dataset.ovsort; route(); return; }
   if ((x = q('[data-sw]'))) { SV.who = x.dataset.sw; route(); return; }
   if ((x = q('[data-st]'))) { SV.type = x.dataset.st; route(); return; }
@@ -341,6 +458,8 @@ document.addEventListener('click', async (e) => {
 });
 document.addEventListener('change', (e) => {
   const id = e.target.id, v = e.target.value;
+  if (id === 'cx') { CV.x = v; route(); } if (id === 'cy') { CV.y = v; route(); } if (id === 'cscope') { CV.scope = v; route(); }
+  if (id === 'cming') { CV.minG = Math.max(1, +v || 1); route(); }
   if (id === 'ws-partner') { WS.draft.partner = v; WS.draft.get = []; route(); }
   if (id === 'ws-give' && v) { WS.draft.give.push(v); route(); }
   if (id === 'ws-get' && v) { WS.draft.get.push(v); route(); }
@@ -348,6 +467,7 @@ document.addEventListener('change', (e) => {
   if (id === 'ws-out') { WS.draft.out = v; route(); }
   if (id === 'ws-scale') { WS.draft.scale = +v || 100; route(); }
 });
+document.addEventListener('input', (e) => { if (e.target.id === 'chi') { CV.hi = e.target.value; clearTimeout(CV._t); CV._t = setTimeout(() => { route(); const el = $('#chi'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 250); } });
 window.addEventListener('hashchange', () => { if (location.hash === '#workshop' && !WS.result && cur().moves.length) rerunWS(); else route(); });
 try { const th = store.get('fflab-theme'); if (th) document.documentElement.dataset.theme = th; } catch {}
 

@@ -1,6 +1,6 @@
 // FF Lab model: weekly player projections, lineups, season sims, trade and waiver math.
 // Pure functions over data/snapshot.json, so the browser and tools/*.mjs share one model.
-import { BLEND } from './blend.js?v=1792647822';
+import { BLEND } from './blend.js?v=1792654421';
 
 export const POS_CV = { QB: 0.32, RB: 0.48, WR: 0.52, TE: 0.58, K: 0.45, DEF: 0.6 };
 const OUT = new Set(['Out', 'IR', 'PUP', 'Sus', 'NA', 'DNR', 'COV']);
