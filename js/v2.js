@@ -1,11 +1,11 @@
 // FF Lab v2: three pages — Overview (power rankings by sector, trade fits, this week),
 // Signals (what's changing, for you and around the league), Workshop (what-if scratchpad).
-import * as M from './model.js?v=1792654421';
-import { lines, spark } from './charts.js?v=1792654421';
-import { overlay } from './live.js?v=1792654421';
-import { computeSignals } from './signals.js?v=1792654421';
-import { buildSnapshot } from './build.js?v=1792654421';
-import { compact, diffChanges } from './sources.js?v=1792654421';
+import * as M from './model.js?v=1792654492';
+import { lines, spark } from './charts.js?v=1792654492';
+import { overlay } from './live.js?v=1792654492';
+import { computeSignals } from './signals.js?v=1792654492';
+import { buildSnapshot } from './build.js?v=1792654492';
+import { compact, diffChanges } from './sources.js?v=1792654492';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -315,7 +315,7 @@ const METRICS = {
   last3: ['Last-3 points / game', (m) => m.last3, 1], xfp: ['Expected points / game', (m) => m.xfp, 1], poe: ['Points over expected / game', (m) => m.poe, 1],
   proj: ['Projected / game, next 4 weeks', (m) => m.proj, 1], value: ['Trade value (FantasyCalc, k)', (m) => m.value, 1],
 };
-const CV = { x: 'wopr', y: 'ppg', pos: 'WR', minG: 3, hi: '', scope: 'all', pin: null };
+const CV = { x: 'wopr', y: 'ppg', pos: 'WR', minG: 3, minSnap: 40, hi: '', scope: 'all', pin: null };
 const PRESETS = [['WOPR vs points (WR)', { x: 'wopr', y: 'ppg', pos: 'WR' }], ['Opportunities vs points (RB)', { x: 'opp', y: 'ppg', pos: 'RB' }],
   ['Target share vs points (TE)', { x: 'tshare', y: 'ppg', pos: 'TE' }], ['Expected vs actual (TD luck)', { x: 'xfp', y: 'ppg', pos: 'ALL' }],
   ['Projection vs trade value (buy signal)', { x: 'value', y: 'proj', pos: 'ALL' }], ['Snap % vs opportunities', { x: 'snap', y: 'opp', pos: 'ALL' }]];
@@ -347,14 +347,14 @@ const LOGO = (t) => t ? `https://a.espncdn.com/i/teamlogos/nfl/500/${({ WAS: 'ws
 function renderCharts() {
   const [xl, xf, xd, xpct] = METRICS[CV.x], [yl, yf, yd, ypct] = METRICS[CV.y];
   const fmt = (v, d, p) => (p ? `${(v * 100).toFixed(0)}%` : v.toFixed(d));
-  const rows = playerMetrics().filter((m) => (CV.pos === 'ALL' || m.p.pos === CV.pos) && m.g >= CV.minG && (CV.scope === 'all' || (CV.scope === 'league' ? m.p.own : CV.scope === 'mine' ? m.p.own === ME.rid : !m.p.own)))
+  const rows = playerMetrics().filter((m) => (CV.pos === 'ALL' || m.p.pos === CV.pos) && m.g >= CV.minG && (m.snap >= CV.minSnap || m.p.own === ME.rid || (CV.hi && m.p.name.toLowerCase().includes(CV.hi.toLowerCase()))) && (CV.scope === 'all' || (CV.scope === 'league' ? m.p.own : CV.scope === 'mine' ? m.p.own === ME.rid : !m.p.own)))
     .filter((m) => Number.isFinite(xf(m)) && Number.isFinite(yf(m)) && (xf(m) > 0 || yf(m) > 0));
   if (rows.length < 3) return `${chartControls()}<div class="card"><div class="empty">Not enough players for this filter.</div></div>`;
   const X = rows.map(xf), Y = rows.map(yf), n = X.length;
   const mx = X.reduce((a, b) => a + b, 0) / n, my = Y.reduce((a, b) => a + b, 0) / n;
   const sxy = X.reduce((t, x, i) => t + (x - mx) * (Y[i] - my), 0), sxx = X.reduce((t, x) => t + (x - mx) ** 2, 0), syy = Y.reduce((t, y) => t + (y - my) ** 2, 0);
   const b = sxx ? sxy / sxx : 0, a = my - b * mx, r = sxx && syy ? sxy / Math.sqrt(sxx * syy) : 0;
-  const W = 900, H = 560, pad = { l: 56, r: 20, t: 24, b: 44 };
+  const W = 900, H = 560, pad = { l: 56, r: 70, t: 30, b: 44 };
   const x0 = Math.min(...X), x1 = Math.max(...X), y0 = Math.min(0, Math.min(...Y)), y1 = Math.max(...Y);
   const px = (v) => pad.l + ((v - x0) / ((x1 - x0) || 1)) * (W - pad.l - pad.r), py = (v) => H - pad.b - ((v - y0) / ((y1 - y0) || 1)) * (H - pad.t - pad.b);
   const hi = CV.hi.trim().toLowerCase();
@@ -364,16 +364,16 @@ function renderCharts() {
     g += `<line class="axis" x1="${pad.l}" x2="${W - pad.r}" y1="${py(vy)}" y2="${py(vy)}" stroke-dasharray="2 4"/><text x="${pad.l - 6}" y="${py(vy) + 4}" text-anchor="end">${fmt(vy, yd, ypct)}</text>`; }
   g += `<line x1="${px(mx)}" x2="${px(mx)}" y1="${pad.t}" y2="${H - pad.b}" stroke="var(--faint)" stroke-dasharray="4 4"/><text x="${px(mx) + 4}" y="${pad.t + 10}">league avg ${fmt(mx, xd, xpct)}</text>`;
   g += `<line x1="${pad.l}" x2="${W - pad.r}" y1="${py(my)}" y2="${py(my)}" stroke="var(--faint)" stroke-dasharray="4 4"/><text x="${W - pad.r - 4}" y="${py(my) - 5}" text-anchor="end">league avg ${fmt(my, yd, ypct)}</text>`;
-  g += `<line x1="${px(x0)}" y1="${py(a + b * x0)}" x2="${px(x1)}" y2="${py(a + b * x1)}" stroke="var(--text)" stroke-opacity=".55" stroke-width="1.5"/><text x="${W - pad.r}" y="${pad.t + 10}" text-anchor="end">R = ${r.toFixed(2)}</text>`;
+  g += `<line x1="${px(x0)}" y1="${py(a + b * x0)}" x2="${px(x1)}" y2="${py(a + b * x1)}" stroke="var(--text)" stroke-opacity=".55" stroke-width="1.5"/><text x="${pad.l + 6}" y="${pad.t - 10}">R = ${r.toFixed(2)}</text>`;
   const labelSet = new Set([...rows].sort((p, q) => yf(q) - yf(p)).slice(0, 45).map((m) => m.p.id));
   for (const m of rows) {
     const x = px(xf(m)), y = py(yf(m)), exp = a + b * xf(m), d = yf(m) - exp;
     const isHi = hi && m.p.name.toLowerCase().includes(hi), mine = m.p.own === ME.rid, dim = hi && !isHi;
-    const ring = isHi ? 'var(--bad)' : mine ? 'var(--act)' : !m.p.own ? 'var(--good)' : 'none';
+    const ring = isHi ? 'var(--bad)' : mine ? 'var(--act)' : !m.p.own ? 'var(--good)' : 'none', ringW = isHi || mine ? 2.5 : 1.2;
     const tip = `<b>${esc(m.p.name)}</b> <span class="faint">${m.p.pos} · ${esc(m.p.team || '')} · ${m.p.own === ME.rid ? 'your team' : m.p.own ? esc(team(m.p.own).owner) : 'free agent'}</span><table>
       <tr><td>${esc(xl)}</td><td style="text-align:right">${fmt(xf(m), xd + 1, xpct)}</td></tr><tr><td>${esc(yl)}</td><td style="text-align:right">${fmt(yf(m), yd + 1, ypct)}</td></tr>
       <tr><td>trend expects</td><td style="text-align:right">${fmt(exp, yd + 1, ypct)}</td></tr><tr><td><b>${d >= 0 ? 'above' : 'below'} the trend</b></td><td style="text-align:right" class="${d >= 0 ? 'good' : 'bad'}"><b>${ypct ? `${d >= 0 ? '+' : ''}${(d * 100).toFixed(0)}%` : sgn(d)}</b></td></tr></table><div class="faint">${m.g} games · click for week-by-week</div>`;
-    g += `<g ${tipAttr(tip)} data-cpin="${m.p.id}" style="cursor:pointer;opacity:${dim ? 0.25 : 1}">${ring !== 'none' ? `<circle cx="${x}" cy="${y}" r="13" fill="none" stroke="${ring}" stroke-width="2.5"/>` : ''}
+    g += `<g ${tipAttr(tip)} data-cpin="${m.p.id}" style="cursor:pointer;opacity:${dim ? 0.25 : 1}">${ring !== 'none' ? `<circle cx="${x}" cy="${y}" r="12.5" fill="none" stroke="${ring}" stroke-width="${ringW}" stroke-opacity="${isHi || mine ? 1 : 0.6}"/>` : ''}
       <circle cx="${x}" cy="${y}" r="10" fill="var(--panel2)"/><image href="${LOGO(m.p.team)}" x="${x - 10}" y="${y - 10}" width="20" height="20"/>
       ${labelSet.has(m.p.id) || isHi || mine ? `<text x="${x}" y="${y - 14}" text-anchor="middle" style="font-weight:700;letter-spacing:.02em;fill:${isHi ? 'var(--bad)' : mine ? 'var(--act)' : 'var(--dim)'}">${esc(m.p.name.split(' ').slice(-1)[0].toUpperCase())}</text>` : ''}</g>`;
   }
@@ -398,6 +398,7 @@ function chartControls() {
     <select id="cx">${opts(CV.x)}</select><span class="faint">vs</span><select id="cy">${opts(CV.y)}</select>
     <select id="cscope">${[['all', 'all players'], ['league', 'league rosters'], ['mine', 'my team'], ['fa', 'free agents']].map(([k, v]) => `<option value="${k}" ${k === CV.scope ? 'selected' : ''}>${v}</option>`).join('')}</select>
     <label class="muted" style="font-size:13px">min games <input type="number" id="cming" value="${CV.minG}" min="1" max="10" style="width:52px"></label>
+    <label class="muted" style="font-size:13px">min snap % <input type="number" id="cminsnap" value="${CV.minSnap}" min="0" max="100" step="5" style="width:58px"></label>
     <input type="search" id="chi" placeholder="highlight player…" value="${esc(CV.hi)}" style="width:160px"></div>
     <div class="chips2" style="margin:10px 0 0">${PRESETS.map(([l], i) => `<button data-cpre="${i}">${esc(l)}</button>`).join('')}</div></div>`;
 }
@@ -460,6 +461,7 @@ document.addEventListener('change', (e) => {
   const id = e.target.id, v = e.target.value;
   if (id === 'cx') { CV.x = v; route(); } if (id === 'cy') { CV.y = v; route(); } if (id === 'cscope') { CV.scope = v; route(); }
   if (id === 'cming') { CV.minG = Math.max(1, +v || 1); route(); }
+  if (id === 'cminsnap') { CV.minSnap = Math.max(0, +v || 0); route(); }
   if (id === 'ws-partner') { WS.draft.partner = v; WS.draft.get = []; route(); }
   if (id === 'ws-give' && v) { WS.draft.give.push(v); route(); }
   if (id === 'ws-get' && v) { WS.draft.get.push(v); route(); }
