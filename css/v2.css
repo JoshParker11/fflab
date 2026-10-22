@@ -1,0 +1,26 @@
+/* v2: Overview / Signals / Workshop */
+#tip { position: fixed; z-index: 50; pointer-events: none; display: none; max-width: 300px; background: var(--panel); color: var(--text);
+  border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; font-size: 12.5px; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
+#tip table td { padding: 2px 4px; border: 0; }
+[data-tip] { cursor: help; border-bottom: 1px dotted var(--faint); }
+.rankcell { display: inline-block; min-width: 30px; padding: 3px 6px; border-radius: 6px; font-weight: 600; font-size: 12.5px; text-align: center; }
+.chips2 { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.chips2 button { background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; font-size: 12.5px; cursor: pointer; color: var(--dim); }
+.chips2 button.on { color: var(--text); border-color: var(--act); }
+.sig { display: grid; grid-template-columns: 4px 1fr auto; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.sig:last-child { border-bottom: 0; }
+.sig i { border-radius: 4px; }
+.sig .t { font-weight: 600; }
+.sig .d { color: var(--dim); font-size: 13px; margin-top: 2px; }
+.sig .e { color: var(--faint); font-size: 12px; margin-top: 3px; }
+.sig .side { text-align: right; font-size: 12px; color: var(--dim); white-space: nowrap; }
+.fit { padding: 11px 0; border-bottom: 1px solid var(--line); }
+.fit:last-child { border-bottom: 0; }
+.move { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 6px; background: var(--panel2); font-size: 13px; }
+.move b { font-weight: 600; }
+.move button { margin-left: auto; background: none; border: 0; color: var(--faint); cursor: pointer; font-size: 15px; }
+.ws-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.ws-tabs button { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; cursor: pointer; color: var(--dim); font-size: 13px; }
+.ws-tabs button.on { color: var(--text); border-color: var(--act); }
+.delta-up { color: var(--good); } .delta-down { color: var(--bad); }
+.kpi .v small { font-size: 13px; font-weight: 500; color: var(--dim); }

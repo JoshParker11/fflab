@@ -1,5 +1,6 @@
 // FF Lab model: weekly player projections, lineups, season sims, trade and waiver math.
 // Pure functions over data/snapshot.json, so the browser and tools/*.mjs share one model.
+import { BLEND } from './blend.js?v=1792645747';
 
 export const POS_CV = { QB: 0.32, RB: 0.48, WR: 0.52, TE: 0.58, K: 0.45, DEF: 0.6 };
 const OUT = new Set(['Out', 'IR', 'PUP', 'Sus', 'NA', 'DNR', 'COV']);
@@ -61,30 +62,69 @@ function avgProj(p, cur) {
   return a;
 }
 
-export function weekDist(p, w, cur, live) {
-  if (w === cur && live) {
-    const g = live.games?.[p.team];
-    if (g?.state === 'post') return { mean: live.pts?.[p.id] ?? 0, sd: 0 };
-  }
-  let mean = p.proj?.[w] ?? 0;
-  if (!mean) return { mean: 0, sd: 0 };
-  const avg = avgProj(p, cur);
-  if (avg) mean = avg + (mean - avg) * matchupWeight(p.pos, w - cur);
-  const f = p.form ?? 1;
-  mean *= 1 + (f - 1) * FORM_DECAY ** (w - cur);
-  if (w === cur) {
-    if (OUT.has(p.inj)) mean = 0;
-    else mean *= INJ_MULT[p.inj] ?? 1;
-  } else if (w === cur + 1 && OUT.has(p.inj) && p.inj !== 'Out') {
-    mean *= 0.5; // IR/PUP next week: projection often assumes a return that may slip
-  }
-  let sd = mean * (POS_CV[p.pos] ?? 0.5) * (1 + 0.03 * (w - cur));
-  if (w === cur && live?.games?.[p.team]?.state === 'in') {
-    const got = live.pts?.[p.id] ?? 0; // halfway: blend banked points with the rest
-    mean = got + mean * 0.5; sd *= 0.6;
-  }
-  return { mean, sd };
+// ---- projections ----
+// Base = Sleeper's projection for that week. Then, each step recorded so the site can show it:
+//  • blend (WR/TE only, fit 2018–24 and beat Sleeper in 2025 and 2026): Vegas implied team total,
+//    last season's ppg, season ppg and recent form, each as "points vs Sleeper" (tools/blend_fit.py)
+//  • far-week matchup smoothing (backtest: matchups 2+ weeks out are mostly noise)
+//  • injury status, live game state, and any Workshop "what-if" override
+// Measured weekly spread: a typical miss is ~5–6 pts, so sd ≈ c·√mean (c fit to 2018–25 errors).
+const SD_C = { QB: 1.85, RB: 2.15, WR: 2.25, TE: 2.3, K: 1.8, DEF: 2.0 };
+let CTX = null; // { snap, vegasAvg } for the snapshot being modeled
+export function bindSnapshot(snap, force = false) {
+  if (CTX?.snap === snap && !force) return;
+  const vegasAvg = {};
+  for (const t of Object.values(snap.vegas || {})) for (const [w, v] of Object.entries(t)) (vegasAvg[w] ||= []).push(v);
+  for (const w in vegasAvg) vegasAvg[w] = vegasAvg[w].reduce((a, b) => a + b, 0) / vegasAvg[w].length;
+  CTX = { snap, vegasAvg };
 }
+function blendSignals(p, w, sl) {
+  const s = CTX?.snap, vt = s?.vegas?.[p.team];
+  const it = vt?.[w];
+  const past = vt ? Object.entries(vt).filter(([k]) => +k < w).map(([, v]) => v) : [];
+  const played = (p.act || []).slice(1, w).filter((x) => x != null);
+  const avg = (v) => v.reduce((a, b) => a + b, 0) / v.length;
+  return {
+    vegas_move: it != null && past.length ? it - avg(past) : 0,
+    vegas_level: it != null && CTX.vegasAvg[w] != null ? it - CTX.vegasAvg[w] : 0,
+    form: played.length >= 2 ? avg(played.slice(-3)) - sl : 0,
+    season: played.length >= 2 ? avg(played) - sl : 0,
+    last_year: (p.ly ?? sl) - sl,
+  };
+}
+const PART = { blend_cal: 'calibration', vegas_move: 'Vegas: team total vs its usual', vegas_level: 'Vegas: offense strength this week',
+  form: 'recent form', season: 'season average', last_year: 'last season' };
+
+export function projParts(p, w, cur, live) {
+  const parts = [];
+  if (w === cur && live?.games?.[p.team]?.state === 'post') { const v = live.pts?.[p.id] ?? 0; return { mean: v, sd: 0, parts: [['final score', v]] }; }
+  const sl = p.proj?.[w] ?? 0;
+  if (!sl) return { mean: 0, sd: 0, parts: [[p.opp?.[w] ? 'not projected' : 'bye', 0]] };
+  parts.push(["Sleeper projection", sl]);
+  let mean = sl;
+  const B = BLEND[p.pos];
+  if (B) {
+    const sig = blendSignals(p, w, sl);
+    const cal = B.a + (B.b - 1) * sl; if (Math.abs(cal) >= 0.05) parts.push([PART.blend_cal, cal]); mean += cal;
+    for (const [k, c] of Object.entries(B.c)) { const v = c * sig[k]; if (Math.abs(v) >= 0.05) parts.push([PART[k], v]); mean += v; }
+  }
+  const ahead = w - cur;
+  if (ahead >= 2) { const avg = avgProj(p, cur); if (avg) { const adj = (avg - sl) * (1 - matchupWeight(p.pos, ahead)); if (Math.abs(adj) >= 0.05) parts.push(['far-week matchup smoothing', adj]); mean += adj; } }
+  if (w === cur) {
+    if (OUT.has(p.inj)) { parts.push([`${p.inj}`, -mean]); mean = 0; }
+    else if (INJ_MULT[p.inj]) { const adj = mean * (INJ_MULT[p.inj] - 1); parts.push([p.inj, adj]); mean += adj; }
+  } else if (w === cur + 1 && OUT.has(p.inj) && p.inj !== 'Out') { parts.push([`${p.inj}: return may slip`, -mean * 0.5]); mean *= 0.5; }
+  const o = CTX?.snap?._overrides?.[p.id];
+  if (o) {
+    if (o.out && w >= o.out[0] && w <= o.out[1]) { parts.push(['what-if: out', -mean]); mean = 0; }
+    else if (o.scale && o.scale !== 1) { parts.push([`what-if: ${Math.round(o.scale * 100)}%`, mean * (o.scale - 1)]); mean *= o.scale; }
+  }
+  mean = Math.max(0, mean);
+  let sd = mean > 0 ? (SD_C[p.pos] ?? 2) * Math.sqrt(mean) * (1 + 0.02 * Math.max(0, ahead)) : 0;
+  if (w === cur && live?.games?.[p.team]?.state === 'in') { const got = live.pts?.[p.id] ?? 0; parts.push(['in progress: banked', got]); mean = got + mean * 0.5; sd *= 0.6; }
+  return { mean, sd, parts };
+}
+export function weekDist(p, w, cur, live) { const r = projParts(p, w, cur, live); return { mean: r.mean, sd: r.sd }; }
 
 // Slot filling: dedicated slots first by best mean, then FLEX from what's left.
 // Greedy is optimal here because FLEX accepts a superset of RB/WR/TE.
@@ -112,6 +152,7 @@ export function bestLineup(ids, players, w, cur, slots, live, opts = {}) {
 // 3rd-best free agent at those spots. Stops us "valuing" a defense we'd never hold.
 const STREAM = ['QB', 'K', 'DEF'];
 export function streamFloor(snap, pos, w) {
+  bindSnapshot(snap);
   const c = (snap._floor ||= {});
   const key = pos + w;
   if (!(key in c)) {
@@ -156,6 +197,7 @@ export function timeWeight(w, cur) { return TIME_DECAY ** (w - cur); }
 // Weighted rest-of-season lineup strength for a set of player ids: expected starting
 // points each week (matchups, byes, injuries, depth), near weeks weighted most.
 export function lineupValue(snap, ids, { from = snap.week, to = 17 } = {}) {
+  bindSnapshot(snap);
   const slots = starterSlots(snap); let v = 0; const weeks = [];
   for (let w = from; w <= to; w++) {
     const m = expectedLineup(snap, ids, w, slots);
@@ -176,6 +218,7 @@ export function rng(seed = 7) {
 // Every week uses that week's matchup-aware projections, byes included; the current week
 // banks points already scored.
 export function simulate(snap, { rosters, n = 4000, seed = 7 } = {}) {
+  bindSnapshot(snap);
   const cur = snap.week, lastReg = snap.league.playoff_week_start - 1;
   const slots = starterSlots(snap);
   const rids = snap.teams.map((t) => t.rid);
@@ -255,6 +298,7 @@ export function trimRoster(snap, ids) {
 
 // A player's own weighted ROS points (used for drop order and fairness, not for lineup value).
 export function playerValue(snap, id) {
+  bindSnapshot(snap);
   const p = snap.players[id]; if (!p) return 0; let v = 0;
   for (let w = snap.week; w <= 17; w++) v += weekDist(p, w, snap.week, snap.live).mean * timeWeight(w, snap.week);
   return v;
@@ -292,6 +336,7 @@ export function evalTrade(snap, myRid, partnerRid, give, get, { n = 3000 } = {})
 
 // Waiver board for one team: gain of adding each free agent, dropping our least useful player.
 export function waiverBoard(snap, rid, { limit = 40 } = {}) {
+  bindSnapshot(snap);
   const t = snap.teams.find((x) => x.rid === rid);
   const ids = activeIds(t);
   const L = (x) => lineupValue(snap, withIR(t, x));
@@ -342,6 +387,7 @@ export function suggestBid(snap, team, gain, pos, adds24 = 0) {
 
 // Positional strength per team for the given week: points by slot group vs league average.
 export function positionProfile(snap, w = snap.week) {
+  bindSnapshot(snap);
   const slots = starterSlots(snap);
   const prof = {};
   for (const t of snap.teams) {
@@ -380,6 +426,7 @@ export function waiverPlan(snap, rid, { steps = 3, minGain = 2 } = {}) {
 // weeks that decide the title (default 16–17 for a bye team). A generator, so the page can
 // run it in slices without freezing.
 export function* titleMoveSearch(snap, rid, { from = snap.league.playoff_week_start + 1, to = 17, maxGive = 2 } = {}) {
+  bindSnapshot(snap);
   const P = snap.players, me = snap.teams.find((t) => t.rid === rid);
   const lv = (ids, t = me, a = from, b = to) => lineupValue(snap, withIR(t, ids), { from: a, to: b });
   const per = (v) => v.weeks.reduce((x, y) => x + y, 0) / v.weeks.length; // pts per title game
@@ -435,7 +482,8 @@ export function* titleMoveSearch(snap, rid, { from = snap.league.playoff_week_st
 
 // ---- scenarios: chains of trades / adds, simulated together ----
 // steps: [{ partner: rid | null (free agent), give: [ids], get: [ids] }]
-export function runScenario(snap, steps, { n = 4000, seed = 11, base } = {}) {
+export function runScenario(snap, steps, { n = 4000, seed = 11, base, overrides = null } = {}) {
+  bindSnapshot(snap);
   const me = snap.teams.find((t) => t.me);
   const rosters = Object.fromEntries(snap.teams.map((t) => [t.rid, activeIds(t)]));
   const touched = [];
@@ -448,13 +496,18 @@ export function runScenario(snap, steps, { n = 4000, seed = 11, base } = {}) {
   for (const t of snap.teams) rosters[t.rid] = withIR(t, rosters[t.rid], moved);
   delete snap._floor;
   const b = base || simulate(snap, { n, seed });
+  const baseWeeks = lineupValue(snap, lineupIds(me)).weeks;
+  if (overrides && Object.keys(overrides).length) snap._overrides = overrides;
+  delete snap._floor;
   const a = simulate(snap, { rosters, n, seed });
+  const afterWeeks = lineupValue(snap, rosters[me.rid]).weeks;
+  delete snap._overrides;
   for (const [id, o] of touched) snap.players[id].own = o;
   delete snap._floor;
   const pw = snap.league.playoff_week_start;
   const fc = (ids) => ids.reduce((t, id) => t + (snap.players[id]?.fc || 0), 0);
   return {
-    base: b, after: a,
+    base: b, after: a, rosters, weeks: { base: baseWeeks, after: afterWeeks },
     me: { rid: me.rid, title: [b.odds[me.rid].title, a.odds[me.rid].title], bye: [b.odds[me.rid].bye, a.odds[me.rid].bye],
       w16: a.dist[pw + 1][me.rid].mean - b.dist[pw + 1][me.rid].mean, w17: a.dist[pw + 2][me.rid].mean - b.dist[pw + 2][me.rid].mean },
     steps: steps.map((st) => ({ ...st, give$: fc(st.give), get$: fc(st.get),

@@ -2,8 +2,8 @@
 // from the sources (rosters, records, live scores, this week's projections and injury tags,
 // trending adds, odds, news, transactions). Season-long projections and stats stay baked.
 import { url, softJSON, scorer, buildTeams, parseGames, parseNews, parseTransactions, trendMap,
-  compact, diffChanges } from './sources.js?v=1792638044';
-import { formFactor } from './model.js?v=1792638044';
+  compact, diffChanges } from './sources.js?v=1792645747';
+import { formFactor } from './model.js?v=1792645747';
 
 const KEY = 'fflab-last-seen';
 const LOG = 'fflab-change-log';
@@ -55,6 +55,7 @@ export async function overlay(S) {
   }
   if (board) {
     S.games = parseGames(board);
+    for (const [t, g] of Object.entries(S.games)) if (g.implied != null) ((S.vegas ||= {})[t] ||= {})[cur] = g.implied;
     S.live.games = Object.fromEntries(Object.entries(S.games).map(([k, g]) => [k, { state: g.state }]));
   }
   if (feed) S.news = parseNews(feed, S.players);
