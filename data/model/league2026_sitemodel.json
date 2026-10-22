@@ -1,0 +1,55 @@
+{
+ "note": "Site model (Sleeper week-of projection x recent-form factor) vs Sleeper raw, on starters in your league",
+ "weeks": [
+  {
+   "w": 2,
+   "playerMaeModel": 6.17,
+   "playerMaeSleeper": 5.74,
+   "teamMaeModel": 18.8,
+   "teamMaeSleeper": 19.3,
+   "winnersModel": 6,
+   "winnersSleeper": 5,
+   "games": 6
+  },
+  {
+   "w": 3,
+   "playerMaeModel": 5.68,
+   "playerMaeSleeper": 5.31,
+   "teamMaeModel": 18.2,
+   "teamMaeSleeper": 17.4,
+   "winnersModel": 5,
+   "winnersSleeper": 5,
+   "games": 6
+  },
+  {
+   "w": 4,
+   "playerMaeModel": 6.48,
+   "playerMaeSleeper": 5.79,
+   "teamMaeModel": 17.5,
+   "teamMaeSleeper": 16,
+   "winnersModel": 2,
+   "winnersSleeper": 2,
+   "games": 6
+  },
+  {
+   "w": 5,
+   "playerMaeModel": 7.27,
+   "playerMaeSleeper": 6.5,
+   "teamMaeModel": 17.6,
+   "teamMaeSleeper": 13.4,
+   "winnersModel": 3,
+   "winnersSleeper": 3,
+   "games": 6
+  },
+  {
+   "w": 6,
+   "playerMaeModel": 6,
+   "playerMaeSleeper": 5.64,
+   "teamMaeModel": 19.4,
+   "teamMaeSleeper": 15.1,
+   "winnersModel": 2,
+   "winnersSleeper": 2,
+   "games": 6
+  }
+ ]
+}

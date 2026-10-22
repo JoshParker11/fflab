@@ -1,6 +1,6 @@
-import * as M from './model.js?v=1792629240';
-import { bars, lines, spark, fromSpec } from './charts.js?v=1792629240';
-import { overlay } from './live.js?v=1792629240';
+import * as M from './model.js?v=1792634909';
+import { bars, lines, spark, fromSpec } from './charts.js?v=1792634909';
+import { overlay } from './live.js?v=1792634909';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -59,12 +59,14 @@ async function load() {
 }
 
 const TABS = { command: renderCommand, pulse: renderPulse, waivers: renderWaivers, trade: renderTrade,
-  opponents: renderOpponents, roster: renderRoster, playoffs: renderPlayoffs, scenarios: renderScenarios, research: renderResearch, lab: renderLab };
+  opponents: renderOpponents, roster: renderRoster, playoffs: renderPlayoffs, scenarios: renderScenarios, research: renderResearch, model: renderModel, lab: renderLab };
 function route() {
   const [tab, arg] = (location.hash.slice(1) || 'command').split('/');
   document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   const el = $('main');
-  el.innerHTML = '<div class="loading">crunching…</div>';
+  if (route.last !== tab) el.innerHTML = '<div class="loading">crunching…</div>';
+  const same = route.last === tab, y = window.scrollY; route.last = tab;
+  if (same) { el.innerHTML = (TABS[tab] || renderCommand)(arg); afterRender(tab); window.scrollTo(0, y); return; }
   setTimeout(() => { el.innerHTML = (TABS[tab] || renderCommand)(arg); afterRender(tab); window.scrollTo(0, 0); }, 10);
 }
 
@@ -713,6 +715,110 @@ function renderResearch() {
     <p class="faint" style="font-size:12px">Reproduce: <code>./tools/fetch_history.sh 2018 … 2025</code>, then <code>python3 tools/research.py</code>.</p></div>`;
 }
 
+
+// ------------------------------------------------------------ model explorer
+// Built offline by tools/model_build.py: for every season and every "as of" week k, the model's
+// prediction for each later week, so you can watch projections converge and see the misses.
+const MX = { metrics: null, season: null, data: {}, k: 6, pos: 'ALL', league: true, q: '', sel: null, tgt: null, mpos: 'WR' };
+const loadJSON = (u) => fetch(`${u}?t=${Date.now()}`).then((r) => r.json());
+function renderModel() {
+  if (!MX.metrics) { Promise.all([loadJSON('data/model/metrics.json'), loadJSON('data/model/league2026_sitemodel.json').catch(() => null)])
+    .then(([m, lg]) => { MX.metrics = m; MX.league26 = lg; MX.season ||= String(Math.max(...m.seasons)); route(); }).catch(() => { MX.metrics = { error: 1 }; route(); }); return '<div class="loading">loading model…</div>'; }
+  if (MX.metrics.error) return '<div class="card"><div class="empty">No model output yet. Run tools/model_build.py.</div></div>';
+  const m = MX.metrics, d = MX.data[MX.season];
+  if (!d) { loadJSON(`data/model/explorer-${MX.season}.json`).then((x) => { MX.data[MX.season] = x; route(); }); }
+  const BUCKETS = ['1', '2-3', '4-6', '7-10', '11+'];
+  const accTable = (res, title) => `<div><div class="muted" style="font-size:12.5px;margin-bottom:4px">${title}</div><table>
+    <tr><th class="l">Pos</th><th>Model</th><th>Sleeper latest</th><th>Season ppg</th><th>Model bias</th><th>Avg pts</th><th>n</th></tr>
+    ${Object.entries(res).map(([p, v]) => { const a = v.all; if (!a) return ''; const best = Math.min(a.model, a.sleeper_latest, a.ppg_so_far);
+      const c = (x) => `<td class="${x === best ? 'good' : ''}">${x.toFixed(2)}</td>`;
+      return `<tr><td class="l">${p}</td>${c(a.model)}${c(a.sleeper_latest)}${c(a.ppg_so_far)}<td>${sgn(a.bias_model)}</td><td>${a.avg_pts.toFixed(1)}</td><td class="faint">${a.n.toLocaleString()}</td></tr>`; }).join('')}</table></div>`;
+  const hz = m.test[MX.mpos] || {};
+  const hChart = lines({ labels: BUCKETS.map((b) => `+${b}`), height: 150, fmt: (v) => v.toFixed(1),
+    series: [{ name: 'model', values: BUCKETS.map((b) => hz[b]?.model ?? null), color: 'var(--good)' },
+             { name: 'Sleeper latest', values: BUCKETS.map((b) => hz[b]?.sleeper_latest ?? null), color: 'var(--info)' },
+             { name: 'season ppg', values: BUCKETS.map((b) => hz[b]?.ppg_so_far ?? null), color: 'var(--faint)' }] });
+  const imp = m.importance?.[MX.mpos] || {};
+  const impRows = Object.entries(imp).sort((a, b) => b[1] - a[1]);
+  return `
+  <div class="card"><h2>How accurate is the model? <small>average points missed per player-week · lower is better · green = best</small></h2>
+    <div class="grid half">${accTable(m.test, 'Test season 2025 (never trained on)')}${accTable(m.live2026, 'Your league, 2026 weeks played (never trained on)')}</div>
+    <p class="faint" style="font-size:12px">"Sleeper latest" carries Sleeper's newest projection forward to every future week. "Season ppg" uses the player's average so far. The model blends market, production, usage and matchup (trained ${m.train[0]}–${m.train.at(-1)}).</p></div>
+  <div class="grid half" style="margin-top:14px">
+    <div class="card"><h2>Error by weeks ahead <small>${MX.mpos} · 2025 test</small></h2>
+      <div class="seg" style="margin-bottom:6px">${['QB', 'RB', 'WR', 'TE'].map((p) => `<button data-mpos="${p}" class="${p === MX.mpos ? 'on' : ''}">${p}</button>`).join('')}</div>${hChart}</div>
+    <div class="card"><h2>What the model leans on <small>${MX.mpos} · how much worse it gets if a stat is scrambled</small></h2>
+      <table>${impRows.slice(0, 10).map(([f, v]) => `<tr><td class="l">${esc(FEAT_NAMES[f] || f)}</td><td style="width:55%"><div style="height:8px;border-radius:4px;background:var(--info);width:${Math.max(2, Math.min(100, (v / (impRows[0][1] || 1)) * 100))}%"></div></td><td>${v.toFixed(2)}</td></tr>`).join('')}</table></div>
+  </div>
+  ${leagueCheckCard()}
+  ${explorerCard(d)}`;
+}
+function leagueCheckCard() {
+  const lg = MX.league26; if (!lg) return '';
+  const W = lg.weeks, avg = (k) => W.reduce((t, w) => t + w[k], 0) / W.length, sum = (k) => W.reduce((t, w) => t + w[k], 0);
+  return `<div class="card" style="margin-top:14px"><h2>The site's old math vs Sleeper on your league <small>every starter, weeks ${W[0].w}–${W.at(-1).w} · what the site used before the new model</small></h2><div class="scroll"><table>
+    <tr><th class="l">Week</th><th>Player miss: site</th><th>Player miss: Sleeper</th><th>Team miss: site</th><th>Team miss: Sleeper</th><th>Winners picked: site / Sleeper</th></tr>
+    ${W.map((w) => `<tr><td class="l">${w.w}</td><td class="${w.playerMaeModel <= w.playerMaeSleeper ? 'good' : 'bad'}">${w.playerMaeModel.toFixed(2)}</td><td>${w.playerMaeSleeper.toFixed(2)}</td><td class="${w.teamMaeModel <= w.teamMaeSleeper ? 'good' : 'bad'}">${w.teamMaeModel.toFixed(1)}</td><td>${w.teamMaeSleeper.toFixed(1)}</td><td>${w.winnersModel} / ${w.winnersSleeper} of ${w.games}</td></tr>`).join('')}
+    <tr><td class="l"><b>All</b></td><td><b>${avg('playerMaeModel').toFixed(2)}</b></td><td><b>${avg('playerMaeSleeper').toFixed(2)}</b></td><td><b>${avg('teamMaeModel').toFixed(1)}</b></td><td><b>${avg('teamMaeSleeper').toFixed(1)}</b></td><td><b>${sum('winnersModel')} / ${sum('winnersSleeper')} of ${sum('games')}</b></td></tr>
+  </table></div><p class="faint" style="font-size:12px">The recent-form factor made player projections worse every week, matching the Research tab. Matchup winners are close to a coin flip at this sample size for any method.</p></div>`;
+}
+const FEAT_NAMES = { h: 'weeks ahead', k: 'as-of week', mkt: "Sleeper's latest projection", mkt_t: "Sleeper's projection for that week", prev: 'last season ppg', ppg: 'season ppg so far',
+  ewm: 'recency-weighted ppg', last3: 'last-3 ppg', gp: 'games played', opp_pg: 'opportunities / game', snap: 'snap share', tshare: 'target share', ayshare: 'air-yard share',
+  wopr: 'WOPR', rzshare: 'red-zone share', dvp: 'opponent pts allowed (DvP)' };
+function explorerCard(d) {
+  const m = MX.metrics;
+  const head = `<div class="row" style="flex-wrap:wrap;gap:8px;margin-bottom:8px">
+    <select id="mx-season">${m.seasons.map((y) => `<option ${String(y) === MX.season ? 'selected' : ''}>${y}</option>`).join('')}</select>
+    <div class="seg">${['ALL', 'QB', 'RB', 'WR', 'TE'].map((p) => `<button data-mxpos="${p}" class="${p === MX.pos ? 'on' : ''}">${p}</button>`).join('')}</div>
+    <label class="muted" style="font-size:13px">as of week <b>${MX.k}</b> <input type="range" id="mx-k" min="0" max="16" value="${MX.k}" style="vertical-align:middle"></label>
+    ${MX.season === '2026' ? `<label class="muted" style="font-size:13px"><input type="checkbox" id="mx-league" ${MX.league ? 'checked' : ''}> league rosters only</label>` : ''}
+    <input type="search" id="mx-q" placeholder="find player" value="${esc(MX.q)}" style="width:150px"></div>`;
+  if (!d) return `<div class="card" style="margin-top:14px"><h2>Projection explorer</h2>${head}<div class="loading">loading ${MX.season}…</div></div>`;
+  const k = MX.k, weeks = Array.from({ length: 17 }, (_, i) => i + 1);
+  let rows = d.players.filter((p) => (MX.pos === 'ALL' || p.pos === MX.pos) && (!MX.q || p.name.toLowerCase().includes(MX.q.toLowerCase())) && (MX.season !== '2026' || !MX.league || p.league));
+  const tot = (p) => p.a.reduce((t, x) => t + (x || 0), 0);
+  rows = rows.sort((a, b) => tot(b) - tot(a)).slice(0, 60);
+  // overall error by as-of week (all players in file, predicted weeks with actuals)
+  const conv = Array.from({ length: 17 }, (_, kk) => { let s = 0, n = 0; for (const p of d.players) for (const [t, v] of Object.entries(p.pred[kk] || {})) { const a = p.a[+t]; if (a != null) { s += Math.abs(v - a); n++; } } return n ? s / n : null; });
+  const cell = (p, t) => {
+    const a = p.a[t];
+    if (t <= k) return `<td class="faint">${a == null ? '–' : a.toFixed(0)}</td>`;
+    const v = p.pred[k]?.[t];
+    if (v == null) return `<td class="faint">bye</td>`;
+    if (a == null) return `<td>${v.toFixed(0)}</td>`;
+    const e = v - a;
+    return `<td style="${heat(-Math.abs(e) / 3 + 1.2, 10)}" title="pred ${v} · actual ${a} · miss ${e.toFixed(1)}">${v.toFixed(0)}<span class="sub">${a.toFixed(0)}</span></td>`;
+  };
+  const grid = `<div class="scroll"><table><tr><th class="l">Player</th>${weeks.map((w) => `<th class="${w === k + 1 ? 'act' : ''}">${w}</th>`).join('')}<th>Avg miss</th></tr>
+    ${rows.map((p) => { const errs = weeks.filter((t) => t > k && p.pred[k]?.[t] != null && p.a[t] != null).map((t) => Math.abs(p.pred[k][t] - p.a[t]));
+      return `<tr data-mxsel="${p.id}" style="cursor:pointer" class="${MX.sel === p.id ? 'me' : ''}"><td class="l"><span class="n">${esc(p.name)}</span><span class="sub">${p.pos} ${esc(p.team || '')}</span></td>${weeks.map((t) => cell(p, t)).join('')}<td><b>${errs.length ? (errs.reduce((a, b) => a + b, 0) / errs.length).toFixed(1) : '–'}</b></td></tr>`; }).join('')}
+    </table></div><p class="faint" style="font-size:12px">Grey = already played (actual). After week ${k}: big number = prediction made after week ${k}, small = what happened. Green = close, red = big miss. Click a player for the convergence chart.</p>`;
+  return `<div class="card" style="margin-top:14px"><h2>Projection explorer <small>${d.out_of_sample ? 'out-of-sample: this season was never trained on' : 'in-sample: this season was used for training'}</small></h2>${head}${grid}</div>
+  <div class="grid half" style="margin-top:14px">
+    <div class="card"><h2>Convergence: whole season <small>average miss of all predictions made after each week</small></h2>
+      ${bars({ labels: conv.map((_, i) => `${i}`), values: conv.map((v) => v ?? 0), fmt: (v) => v.toFixed(1), color: () => 'var(--info)', height: 150 })}
+      <p class="faint" style="font-size:12px">x = as-of week. Errors shrink as real data replaces guesses, then flatten: the rest is week-to-week noise.</p></div>
+    ${playerConvergence(d)}
+  </div>`;
+}
+function playerConvergence(d) {
+  const p = d.players.find((x) => x.id === MX.sel);
+  if (!p) return '<div class="card"><h2>Player convergence</h2><div class="empty">Click a player in the explorer.</div></div>';
+  // predicted vs actual average of the remaining season, as of each week
+  const ks = Array.from({ length: 17 }, (_, k) => k);
+  const predRos = ks.map((k) => { const v = Object.entries(p.pred[k] || {}).map(([, x]) => x); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; });
+  const actRos = ks.map((k) => { const v = p.a.slice(k + 1).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; });
+  const t = MX.tgt || Math.min(17, MX.k + 4);
+  const predT = ks.map((k) => (k < t ? p.pred[k]?.[t] ?? null : null));
+  return `<div class="card"><h2>${esc(p.name)} <small>${p.pos} · predictions converging</small></h2>
+    ${lines({ labels: ks.map((k) => `${k}`), height: 160, fmt: (v) => v.toFixed(0), series: [
+      { name: 'predicted rest-of-season ppg', values: predRos, color: 'var(--good)' }, { name: 'actual rest-of-season ppg', values: actRos, color: 'var(--act)' }] })}
+    <div class="row" style="margin-top:8px"><span class="muted" style="font-size:13px">Week</span><select id="mx-tgt">${Array.from({ length: 17 }, (_, i) => i + 1).map((w) => `<option ${w === t ? 'selected' : ''}>${w}</option>`).join('')}</select><span class="muted" style="font-size:13px">prediction as of each earlier week (actual: <b>${p.a[t] == null ? '–' : p.a[t].toFixed(1)}</b>)</span></div>
+    ${lines({ labels: ks.slice(0, t).map((k) => `${k}`), height: 140, fmt: (v) => v.toFixed(0), series: [
+      { name: `predicted week ${t}`, values: predT.slice(0, t), color: 'var(--info)' }, { name: 'actual', values: ks.slice(0, t).map(() => p.a[t] ?? null), color: 'var(--bad)', dash: true }] })}
+  </div>`;
+}
+
 // ------------------------------------------------------------ events
 function afterRender(tab) {
   const arg = location.hash.split('/')[1];
@@ -728,6 +834,9 @@ document.addEventListener('click', (e) => {
   if (e.target.id === 'clear-trade') { Object.assign(T, { give: [], get: [], result: null }); route(); }
   if (e.target.id === 'find-moves') { runMoveSearch(); return; }
   if (e.target.id === 'run-all-sc') { runAllScenarios(); return; }
+  const mp = e.target.closest('[data-mpos]'); if (mp) { MX.mpos = mp.dataset.mpos; route(); return; }
+  const mxp = e.target.closest('[data-mxpos]'); if (mxp) { MX.pos = mxp.dataset.mxpos; route(); return; }
+  const mxs = e.target.closest('[data-mxsel]'); if (mxs) { MX.sel = mxs.dataset.mxsel; route(); return; }
   const rs = e.target.closest('[data-runsc]'); if (rs) { const k = rs.dataset.runsc; const sc = k[0] === 'p' ? SC.presets[+k.slice(1)] : savedScenarios()[+k.slice(1)]; rs.textContent = '…'; setTimeout(() => { runOne(k, sc); route(); }, 20); return; }
   const ds = e.target.closest('[data-delsc]'); if (ds) { const v = savedScenarios(); v.splice(+ds.dataset.delsc - 1, 1); saveScenarios(v); Object.keys(SC.results).filter((k) => k[0] === 'm').forEach((k) => delete SC.results[k]); route(); return; }
   const dst = e.target.closest('[data-dropstep]'); if (dst) { SC.draft.splice(+dst.dataset.dropstep, 1); route(); return; }
@@ -742,11 +851,18 @@ document.addEventListener('click', (e) => {
 document.addEventListener('change', (e) => {
   if (e.target.id === 'give-sel' && e.target.value) { T.give.push(e.target.value); T.result = null; route(); }
   if (e.target.id === 'get-sel' && e.target.value) { T.get.push(e.target.value); T.result = null; route(); }
+  if (e.target.id === 'mx-season') { MX.season = e.target.value; MX.sel = null; route(); return; }
+  if (e.target.id === 'mx-league') { MX.league = e.target.checked; route(); return; }
+  if (e.target.id === 'mx-tgt') { MX.tgt = +e.target.value; route(); return; }
   if (e.target.id === 'sc-partner') { SC.step = { partner: e.target.value, give: SC.step.give, get: [] }; route(); return; }
   if (e.target.id === 'sc-give' && e.target.value) { SC.step.give.push(e.target.value); route(); return; }
   if (e.target.id === 'sc-get' && e.target.value) { SC.step.get.push(e.target.value); route(); return; }
   if (e.target.id === 'moves-realistic') { MOVES.realistic = e.target.checked; const c = $('#moves-card'); if (c) c.outerHTML = titleMovesCard(); return; }
   if (e.target.id === 'partner-sel') { T.partner = Number(e.target.value) || null; T.get = []; T.result = null; route(); }
+});
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'mx-k') { MX.k = +e.target.value; clearTimeout(MX._t); MX._t = setTimeout(route, 120); }
+  if (e.target.id === 'mx-q') { MX.q = e.target.value; clearTimeout(MX._t); MX._t = setTimeout(() => { route(); setTimeout(() => { const q = $('#mx-q'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }, 30); }, 300); }
 });
 window.addEventListener('hashchange', route);
 $('#refresh').addEventListener('click', async () => { $('#refresh').textContent = '…'; await load(); $('#refresh').textContent = 'refresh'; route(); });

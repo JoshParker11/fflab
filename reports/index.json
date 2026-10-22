@@ -1,5 +1,11 @@
 [
   {
+    "file": "model-plan.md",
+    "title": "FF Lab model: the plan",
+    "date": "2026-10-22",
+    "summary": "How the projection model is built, tested and plugged into the site"
+  },
+  {
     "file": "2026-10-22-strategy-deep-dive.md",
     "title": "Strategy deep dive: talent vs schedule, QB call, beating BooberEats",
     "date": "2026-10-22",
