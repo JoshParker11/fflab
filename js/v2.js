@@ -1,11 +1,11 @@
 // FF Lab v2: three pages — Overview (power rankings by sector, trade fits, this week),
 // Signals (what's changing, for you and around the league), Workshop (what-if scratchpad).
-import * as M from './model.js?v=1792645747';
-import { lines, spark } from './charts.js?v=1792645747';
-import { overlay } from './live.js?v=1792645747';
-import { computeSignals } from './signals.js?v=1792645747';
-import { buildSnapshot } from './build.js?v=1792645747';
-import { compact, diffChanges } from './sources.js?v=1792645747';
+import * as M from './model.js?v=1792645849';
+import { lines, spark } from './charts.js?v=1792645849';
+import { overlay } from './live.js?v=1792645849';
+import { computeSignals } from './signals.js?v=1792645849';
+import { buildSnapshot } from './build.js?v=1792645849';
+import { compact, diffChanges } from './sources.js?v=1792645849';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -24,6 +24,7 @@ const tipEl = () => $('#tip');
 function tipFor(el) { return el.getAttribute('data-tip'); }
 document.addEventListener('mouseover', (e) => { const el = e.target.closest('[data-tip]'); if (!el) return; const t = tipEl(); t.innerHTML = tipFor(el); t.style.display = 'block'; });
 document.addEventListener('mousemove', (e) => { const t = tipEl(); if (t.style.display !== 'block') return; const x = Math.min(e.clientX + 14, innerWidth - t.offsetWidth - 8); const y = e.clientY + 16 + t.offsetHeight > innerHeight ? e.clientY - t.offsetHeight - 10 : e.clientY + 16; t.style.left = `${x}px`; t.style.top = `${y}px`; });
+window.addEventListener('scroll', () => { const t = tipEl(); if (t) t.style.display = 'none'; }, { passive: true });
 document.addEventListener('mouseout', (e) => { if (e.target.closest('[data-tip]')) tipEl().style.display = 'none'; });
 document.addEventListener('click', (e) => { // tap to show on phones
   const el = e.target.closest('[data-tip]'); const t = tipEl();
@@ -40,6 +41,12 @@ function proj(p, w = S.week, digits = 1) {
   const rows = r.parts.map(([k, v], i) => `<tr><td>${esc(k)}</td><td style="text-align:right">${i === 0 ? v.toFixed(1) : sgn(v)}</td></tr>`).join('');
   const html = `<b>${esc(p.name)} · week ${w}</b><table>${rows}<tr><td><b>projection</b></td><td style="text-align:right"><b>${r.mean.toFixed(1)}</b></td></tr></table><div class="faint">typical range ${Math.max(0, r.mean - r.sd).toFixed(0)}–${(r.mean + r.sd).toFixed(0)}</div>`;
   return `<span ${tipAttr(html)}>${r.mean.toFixed(digits)}</span>`;
+}
+// average projection over the next 4 weeks, with the week-by-week numbers on hover
+function ros4(p) {
+  const ws = [0, 1, 2, 3].map((i) => S.week + i).filter((w) => w <= 17);
+  const v = ws.map((w) => M.projParts(p, w, S.week, S.live).mean), a = v.reduce((x, y) => x + y, 0) / v.length;
+  return `<span ${tipAttr(`<b>${esc(p.name)}</b><table>${ws.map((w, i) => `<tr><td>week ${w}${p.opp?.[w] ? ` vs ${esc(p.opp[w])}` : ' (bye)'}</td><td style="text-align:right">${v[i].toFixed(1)}</td></tr>`).join('')}</table>`)}>${a.toFixed(1)}</span>`;
 }
 function who(p, sub = true) {
   if (!p) return '<span class="faint">—</span>';
@@ -123,8 +130,9 @@ function tradeFits() {
     // their spare: best player at a strong position who isn't one of their two best there
     const spare = (rid, pos) => team(rid).players.map(P).filter((p) => p && posOf[pos].includes(p.pos))
       .map((p) => ({ p, v: M.playerValue(S, p.id) })).sort((a, b) => b.v - a.v);
+    // what each side can spare: players behind their top starter(s) at the position
     const giveOpts = theyNeed.flatMap((k) => spare(ME.rid, k).slice(k === 'RB' || k === 'WR' ? 2 : 1, 4)).filter((x) => x.v > 20).slice(0, 3);
-    const getOpts = theyHave.flatMap((k) => spare(t.rid, k).slice(0, 3)).filter((x) => x.v > 30).slice(0, 3);
+    const getOpts = theyHave.flatMap((k) => spare(t.rid, k).slice(1, k === 'RB' || k === 'WR' ? 4 : 2)).filter((x) => x.v > 30).slice(0, 3);
     if (!giveOpts.length || !getOpts.length) continue;
     const score = theyNeed.reduce((s, k) => s + d[k].rank, 0) + theyHave.reduce((s, k) => s + (13 - d[k].rank), 0) + (myWeak.some((k) => theyHave.includes(k)) ? 6 : 0);
     out.push({ t, strong: theyHave, weak: theyNeed, give: giveOpts, get: getOpts, score, fitsMe: theyHave.filter((k) => myWeak.includes(k)) });
@@ -164,7 +172,8 @@ function renderOverview() {
       ${fits.list.slice(0, 5).map((f) => `<div class="fit"><div class="row"><b>${esc(f.t.owner)}</b><span class="faint" style="font-size:12px">${f.t.wins}-${f.t.losses}</span><span class="sp"></span>
         <button class="btn ghost" style="padding:3px 9px;font-size:12px" data-fit="${f.t.rid}">try in Workshop</button></div>
         <div class="muted" style="font-size:13px">Strong at <b class="good">${f.strong.map((k) => `${k} (#${D[f.t.rid][k].rank})`).join(', ')}</b>, thin at <b class="bad">${f.weak.map((k) => `${k} (#${D[f.t.rid][k].rank})`).join(', ')}</b>.${f.fitsMe.length ? ` Their strength is your need (${f.fitsMe.join(', ')}).` : ''}</div>
-        <div style="font-size:12.5px;margin-top:3px"><span class="faint">They could use:</span> ${f.give.map((x) => `${esc(x.p.name)} (${proj(x.p)})`).join(', ')}<br><span class="faint">Ask about:</span> ${f.get.map((x) => `${esc(x.p.name)} (${proj(x.p)})`).join(', ')}</div></div>`).join('') || '<div class="empty">No clear mismatches right now.</div>'}
+        <div style="font-size:12.5px;margin-top:3px"><span class="faint">They could use:</span> ${f.give.map((x) => `${esc(x.p.name)} (${ros4(x.p)})`).join(', ')}<br><span class="faint">Ask about:</span> ${f.get.map((x) => `${esc(x.p.name)} (${ros4(x.p)})`).join(', ')}</div></div>`).join('') || '<div class="empty">No clear mismatches right now.</div>'}
+      <p class="faint" style="font-size:12px">Numbers are average projected points over the next 4 weeks.</p>
     </div>
     <div class="card"><h2>Week ${S.week} ${OPP ? `vs ${esc(OPP.owner)}` : ''} <small>hover a number for how it's built</small></h2>
       ${OPP ? `<div class="scroll"><table><tr><th class="l">${esc(ME.owner)}</th><th>Proj</th><th></th><th>Proj</th><th class="l">${esc(OPP.owner)}</th></tr>
