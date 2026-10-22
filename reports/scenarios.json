@@ -1,16 +1,434 @@
 [
-  {"name": "Maye (Dak + K. Allen)", "note": "QB plan baseline", "steps": [{"partner": "tbwelch", "give": ["Dak Prescott", "Keenan Allen"], "get": ["Drake Maye"]}]},
-  {"name": "Josh Allen (Bucky + Dak)", "note": "QB alternative", "steps": [{"partner": "sim1flowers", "give": ["Bucky Irving", "Dak Prescott"], "get": ["Josh Allen"]}]},
-  {"name": "Lawrence (Bucky)", "note": "QB alternative", "steps": [{"partner": "Jjenness", "give": ["Bucky Irving"], "get": ["Trevor Lawrence"]}]},
-  {"name": "Maye + Hubbard (Brown)", "note": "QB + RB upgrade", "steps": [{"partner": "tbwelch", "give": ["Dak Prescott", "Keenan Allen"], "get": ["Drake Maye"]}, {"partner": "tbwelch", "give": ["Chase Brown"], "get": ["Chuba Hubbard"]}]},
-  {"name": "Maye + Hubbard + Nabers (Bucky + Cooper)", "note": "best realistic plan found", "steps": [{"partner": "tbwelch", "give": ["Dak Prescott", "Keenan Allen"], "get": ["Drake Maye"]}, {"partner": "tbwelch", "give": ["Chase Brown"], "get": ["Chuba Hubbard"]}, {"partner": "mgcoluccio", "give": ["Bucky Irving", "Omar Cooper Jr."], "get": ["Malik Nabers"]}]},
-  {"name": "Maye + Nabers (Bucky + Cooper)", "note": "", "steps": [{"partner": "tbwelch", "give": ["Dak Prescott", "Keenan Allen"], "get": ["Drake Maye"]}, {"partner": "mgcoluccio", "give": ["Bucky Irving", "Omar Cooper Jr."], "get": ["Malik Nabers"]}]},
-  {"name": "Maye + Nabers (Chase Brown + Cooper)", "note": "", "steps": [{"partner": "tbwelch", "give": ["Dak Prescott", "Keenan Allen"], "get": ["Drake Maye"]}, {"partner": "mgcoluccio", "give": ["Chase Brown", "Omar Cooper Jr."], "get": ["Malik Nabers"]}]},
-  {"name": "Maye + Nabers (Javonte 1-for-1)", "note": "selling Javonte for a WR", "steps": [{"partner": "tbwelch", "give": ["Dak Prescott", "Keenan Allen"], "get": ["Drake Maye"]}, {"partner": "mgcoluccio", "give": ["Javonte Williams"], "get": ["Malik Nabers"]}]},
-  {"name": "Maye + Burden (Bernard + Cooper)", "note": "", "steps": [{"partner": "tbwelch", "give": ["Dak Prescott", "Keenan Allen"], "get": ["Drake Maye"]}, {"partner": "ExWill", "give": ["Germie Bernard", "Omar Cooper Jr."], "get": ["Luther Burden III"]}]},
-  {"name": "Maye + J. Love (Chase Brown)", "note": "commissioner's team", "steps": [{"partner": "tbwelch", "give": ["Dak Prescott", "Keenan Allen"], "get": ["Drake Maye"]}, {"partner": "jaythe1st", "give": ["Chase Brown"], "get": ["Jeremiyah Love"]}]},
-  {"name": "Maye + Loveland (Strange)", "note": "", "steps": [{"partner": "tbwelch", "give": ["Dak Prescott", "Keenan Allen"], "get": ["Drake Maye"]}, {"partner": "Jjenness", "give": ["Brenton Strange"], "get": ["Colston Loveland"]}]},
-  {"name": "Maye + LaPorta → Loveland + Golden", "note": "selling LaPorta", "steps": [{"partner": "tbwelch", "give": ["Dak Prescott", "Keenan Allen"], "get": ["Drake Maye"]}, {"partner": "Jjenness", "give": ["Sam LaPorta"], "get": ["Colston Loveland", "Matthew Golden"]}]},
-  {"name": "Maye + Javonte → Hubbard", "note": "selling Javonte for an RB", "steps": [{"partner": "tbwelch", "give": ["Dak Prescott", "Keenan Allen"], "get": ["Drake Maye"]}, {"partner": "tbwelch", "give": ["Javonte Williams"], "get": ["Chuba Hubbard"]}]},
-  {"name": "Maye + JSN (Javonte + Cooper + Strange)", "note": "dream: katiek would want more", "steps": [{"partner": "tbwelch", "give": ["Dak Prescott", "Keenan Allen"], "get": ["Drake Maye"]}, {"partner": "katiek626", "give": ["Javonte Williams", "Omar Cooper Jr.", "Brenton Strange"], "get": ["Jaxon Smith-Njigba"]}]}
+ {
+  "name": "Lawrence + Hubbard (Bucky; Brown)",
+  "note": "most likely to actually happen",
+  "steps": [
+   {
+    "partner": "Jjenness",
+    "give": [
+     "Bucky Irving"
+    ],
+    "get": [
+     "Trevor Lawrence"
+    ]
+   },
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Chase Brown"
+    ],
+    "get": [
+     "Chuba Hubbard"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Nabers (Bucky + Cooper + Strange)",
+  "note": "3-for-1 that improves mgcoluccio's lineup",
+  "steps": [
+   {
+    "partner": "mgcoluccio",
+    "give": [
+     "Bucky Irving",
+     "Omar Cooper Jr.",
+     "Brenton Strange"
+    ],
+    "get": [
+     "Malik Nabers"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Maye sweetened (Dak + K. Allen + Cooper)",
+  "note": "even on market value",
+  "steps": [
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Dak Prescott",
+     "Keenan Allen",
+     "Omar Cooper Jr."
+    ],
+    "get": [
+     "Drake Maye"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Maye + Hubbard + Nabers (Bucky + Cooper + Strange)",
+  "note": "full plan, Nabers package they'd like",
+  "steps": [
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Dak Prescott",
+     "Keenan Allen"
+    ],
+    "get": [
+     "Drake Maye"
+    ]
+   },
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Chase Brown"
+    ],
+    "get": [
+     "Chuba Hubbard"
+    ]
+   },
+   {
+    "partner": "mgcoluccio",
+    "give": [
+     "Bucky Irving",
+     "Omar Cooper Jr.",
+     "Brenton Strange"
+    ],
+    "get": [
+     "Malik Nabers"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Maye (Dak + K. Allen)",
+  "note": "QB plan baseline",
+  "steps": [
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Dak Prescott",
+     "Keenan Allen"
+    ],
+    "get": [
+     "Drake Maye"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Josh Allen (Bucky + Dak)",
+  "note": "QB alternative",
+  "steps": [
+   {
+    "partner": "sim1flowers",
+    "give": [
+     "Bucky Irving",
+     "Dak Prescott"
+    ],
+    "get": [
+     "Josh Allen"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Lawrence (Bucky)",
+  "note": "QB alternative",
+  "steps": [
+   {
+    "partner": "Jjenness",
+    "give": [
+     "Bucky Irving"
+    ],
+    "get": [
+     "Trevor Lawrence"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Maye + Hubbard (Brown)",
+  "note": "QB + RB upgrade",
+  "steps": [
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Dak Prescott",
+     "Keenan Allen"
+    ],
+    "get": [
+     "Drake Maye"
+    ]
+   },
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Chase Brown"
+    ],
+    "get": [
+     "Chuba Hubbard"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Maye + Hubbard + Nabers (Bucky + Cooper)",
+  "note": "best realistic plan found",
+  "steps": [
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Dak Prescott",
+     "Keenan Allen"
+    ],
+    "get": [
+     "Drake Maye"
+    ]
+   },
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Chase Brown"
+    ],
+    "get": [
+     "Chuba Hubbard"
+    ]
+   },
+   {
+    "partner": "mgcoluccio",
+    "give": [
+     "Bucky Irving",
+     "Omar Cooper Jr."
+    ],
+    "get": [
+     "Malik Nabers"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Maye + Nabers (Bucky + Cooper)",
+  "note": "",
+  "steps": [
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Dak Prescott",
+     "Keenan Allen"
+    ],
+    "get": [
+     "Drake Maye"
+    ]
+   },
+   {
+    "partner": "mgcoluccio",
+    "give": [
+     "Bucky Irving",
+     "Omar Cooper Jr."
+    ],
+    "get": [
+     "Malik Nabers"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Maye + Nabers (Chase Brown + Cooper)",
+  "note": "",
+  "steps": [
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Dak Prescott",
+     "Keenan Allen"
+    ],
+    "get": [
+     "Drake Maye"
+    ]
+   },
+   {
+    "partner": "mgcoluccio",
+    "give": [
+     "Chase Brown",
+     "Omar Cooper Jr."
+    ],
+    "get": [
+     "Malik Nabers"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Maye + Nabers (Javonte 1-for-1)",
+  "note": "selling Javonte for a WR",
+  "steps": [
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Dak Prescott",
+     "Keenan Allen"
+    ],
+    "get": [
+     "Drake Maye"
+    ]
+   },
+   {
+    "partner": "mgcoluccio",
+    "give": [
+     "Javonte Williams"
+    ],
+    "get": [
+     "Malik Nabers"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Maye + Burden (Bernard + Cooper)",
+  "note": "",
+  "steps": [
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Dak Prescott",
+     "Keenan Allen"
+    ],
+    "get": [
+     "Drake Maye"
+    ]
+   },
+   {
+    "partner": "ExWill",
+    "give": [
+     "Germie Bernard",
+     "Omar Cooper Jr."
+    ],
+    "get": [
+     "Luther Burden III"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Maye + J. Love (Chase Brown)",
+  "note": "commissioner's team",
+  "steps": [
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Dak Prescott",
+     "Keenan Allen"
+    ],
+    "get": [
+     "Drake Maye"
+    ]
+   },
+   {
+    "partner": "jaythe1st",
+    "give": [
+     "Chase Brown"
+    ],
+    "get": [
+     "Jeremiyah Love"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Maye + Loveland (Strange)",
+  "note": "",
+  "steps": [
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Dak Prescott",
+     "Keenan Allen"
+    ],
+    "get": [
+     "Drake Maye"
+    ]
+   },
+   {
+    "partner": "Jjenness",
+    "give": [
+     "Brenton Strange"
+    ],
+    "get": [
+     "Colston Loveland"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Maye + LaPorta \u2192 Loveland + Golden",
+  "note": "selling LaPorta",
+  "steps": [
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Dak Prescott",
+     "Keenan Allen"
+    ],
+    "get": [
+     "Drake Maye"
+    ]
+   },
+   {
+    "partner": "Jjenness",
+    "give": [
+     "Sam LaPorta"
+    ],
+    "get": [
+     "Colston Loveland",
+     "Matthew Golden"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Maye + Javonte \u2192 Hubbard",
+  "note": "selling Javonte for an RB",
+  "steps": [
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Dak Prescott",
+     "Keenan Allen"
+    ],
+    "get": [
+     "Drake Maye"
+    ]
+   },
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Javonte Williams"
+    ],
+    "get": [
+     "Chuba Hubbard"
+    ]
+   }
+  ]
+ },
+ {
+  "name": "Maye + JSN (Javonte + Cooper + Strange)",
+  "note": "dream: katiek would want more",
+  "steps": [
+   {
+    "partner": "tbwelch",
+    "give": [
+     "Dak Prescott",
+     "Keenan Allen"
+    ],
+    "get": [
+     "Drake Maye"
+    ]
+   },
+   {
+    "partner": "katiek626",
+    "give": [
+     "Javonte Williams",
+     "Omar Cooper Jr.",
+     "Brenton Strange"
+    ],
+    "get": [
+     "Jaxon Smith-Njigba"
+    ]
+   }
+  ]
+ }
 ]

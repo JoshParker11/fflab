@@ -11,7 +11,7 @@ for (const id in S.players) S.players[id].id = id;
 const P = S.players, ME = S.teams.find((t) => t.me);
 const maxGive = Number(process.argv[2] || 2);
 const from = Number(process.argv[3] || S.week), to = Number(process.argv[4] || 17);
-const lv = (ids) => M.lineupValue(S, ids, { from, to }).value;
+const lv = (ids, t = ME) => M.lineupValue(S, M.withIR(t, ids), { from, to }).value;
 console.log(`Objective: weighted expected lineup, weeks ${from}–${to}`);
 const ids0 = M.activeIds(ME), base = lv(ids0);
 
@@ -26,14 +26,14 @@ for (let i = 0; i < pool.length; i++) {
 const playoffPts = (id) => [15, 16, 17].reduce((t, w) => t + M.weekDist(P[id], w, S.week, S.live).mean, 0);
 const out = [];
 for (const t of S.teams.filter((x) => !x.me)) {
-  const theirs = M.activeIds(t), tb = lv(theirs);
+  const theirs = M.activeIds(t), tb = lv(theirs, t);
   const targets = theirs.filter((id) => ['QB', 'RB', 'WR', 'TE'].includes(P[id]?.pos) && M.playerValue(S, id) > 40);
   for (const get of targets) for (const give of combos) {
     const mine = M.trimRoster(S, [...ids0.filter((x) => !give.includes(x)), get]).ids;
     const gain = lv(mine) - base;
     if (gain < (to - from < 4 ? 1 : 4)) continue;
     const their = M.trimRoster(S, [...theirs.filter((x) => x !== get), ...give]).ids;
-    const theirGain = lv(their) - tb;
+    const theirGain = lv(their, t) - tb;
     const gv = give.reduce((s, id) => s + (P[id].fc || 0), 0), gt = P[get].fc || 0;
     const gap = Math.abs(gv - gt) / Math.max(gv, gt, 1);
     out.push({ team: t.owner, rec: `${t.wins}-${t.losses}`, get, give, gain, theirGain, gap, gv, gt, po: playoffPts(get) - give.reduce((s, id) => s + playoffPts(id), 0) });

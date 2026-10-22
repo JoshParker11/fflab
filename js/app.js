@@ -1,6 +1,6 @@
-import * as M from './model.js?v=1792624809';
-import { bars, lines, spark, fromSpec } from './charts.js?v=1792624809';
-import { overlay } from './live.js?v=1792624809';
+import * as M from './model.js?v=1792629240';
+import { bars, lines, spark, fromSpec } from './charts.js?v=1792629240';
+import { overlay } from './live.js?v=1792629240';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -70,7 +70,7 @@ function route() {
 
 // ------------------------------------------------------------ command
 function myLineup(rid = ME.rid, w = S.week) {
-  return M.bestLineup(M.activeIds(team(rid)), S.players, w, S.week, M.starterSlots(S), S.live);
+  return M.bestLineup(M.lineupIds(team(rid)), S.players, w, S.week, M.starterSlots(S), S.live);
 }
 function setLineup(t) { // what Sleeper actually has set
   const slots = M.starterSlots(S);
@@ -101,7 +101,7 @@ function actions() {
   }
   (cache.plan || []).forEach((r, i) => out.push({ lvl: r.gain > 8 ? 'hi' : '', t: `Claim ${i + 1}: add ${P(r.id).name}${r.bid ? ` ($${r.bid})` : ''}, drop ${P(r.drop).name}`,
     d: `+${r.gain.toFixed(1)} weighted lineup points ROS; next 3 wks ${r.weeks.slice(0, 3).map((x) => sgn(x)).join(' / ')}.${P(r.id).add24 > 500000 ? ' Heavily added right now; expect competition.' : ''}` }));
-  const wk = M.lineupValue(S, M.activeIds(ME)).weeks, avg = wk.reduce((a, b) => a + b, 0) / wk.length;
+  const wk = M.lineupValue(S, M.lineupIds(ME)).weeks, avg = wk.reduce((a, b) => a + b, 0) / wk.length;
   wk.slice(1, 6).forEach((v, i) => { if (v < avg * 0.92) out.push({ lvl: '', t: `Week ${S.week + 1 + i} looks thin (${v.toFixed(0)} vs ${avg.toFixed(0)} avg)`,
     d: `Byes: ${M.activeIds(ME).map(P).filter((p) => p?.bye === S.week + 1 + i).map((p) => p.name).join(', ') || 'none — matchups/injuries'}. Plan an add or trade before then.` }); });
   if (OPP) for (const x of setLineup(OPP)) if (x.p?.inj) out.push({ lvl: 'ok', t: `Opponent's ${x.p.name} is ${x.p.inj}`, d: `${OPP.owner} may lose ~${f1(x.mean)} if he sits.` });
@@ -234,9 +234,9 @@ let wpos = 'ALL';
 const rosPerGame = (p) => { const v = p.proj.slice(S.week).filter((x) => x > 0); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; };
 function dropCosts() {
   if (cache.dropCosts) return cache.dropCosts;
-  const ids = M.activeIds(ME), base = M.lineupValue(S, ids);
+  const ids = M.activeIds(ME), base = M.lineupValue(S, M.withIR(ME, ids));
   return (cache.dropCosts = ids.map((id) => {
-    const v = M.lineupValue(S, ids.filter((x) => x !== id));
+    const v = M.lineupValue(S, M.withIR(ME, ids.filter((x) => x !== id)));
     return { id, cost: base.value - v.value, weeks: v.weeks.map((x, i) => x - base.weeks[i]) };
   }).sort((a, b) => a.cost - b.cost));
 }
@@ -347,7 +347,7 @@ function partnerFinder() {
 // ------------------------------------------------------------ opponents
 function renderOpponents(arg) {
   const { ap, games } = allPlay();
-  const strength = Object.fromEntries(S.teams.map((t) => [t.rid, M.lineupValue(S, M.activeIds(t), { to: Math.min(S.week + 3, 17) })]));
+  const strength = Object.fromEntries(S.teams.map((t) => [t.rid, M.lineupValue(S, M.lineupIds(t), { to: Math.min(S.week + 3, 17) })]));
   const rows = [...S.teams].sort((a, b) => strength[b.rid].value - strength[a.rid].value);
   const sel = arg ? team(Number(arg)) : OPP;
   return `
@@ -361,10 +361,10 @@ function renderOpponents(arg) {
 function teamCard(t) {
   const lu = myLineup(t.rid);
   const { prof, avg } = cache.prof ||= M.positionProfile(S);
-  const wk = M.lineupValue(S, M.activeIds(t)).weeks;
+  const wk = M.lineupValue(S, M.lineupIds(t)).weeks;
   const labels = wk.map((_, i) => `W${S.week + i}`);
   const hurt = t.players.map(P).filter((p) => p?.inj);
-  const myWk = M.lineupValue(S, M.activeIds(ME)).weeks;
+  const myWk = M.lineupValue(S, M.lineupIds(ME)).weeks;
   return `<div class="card" style="margin-top:14px">
     <h2>${esc(t.owner)} · ${esc(t.team)} <small>${t.wins}-${t.losses} · $${t.faab} FAAB · ${t.moves} moves</small></h2>
     <div class="grid half">
@@ -388,7 +388,7 @@ function renderRoster() {
   const order = { QB: 0, RB: 1, WR: 2, TE: 3, K: 4, DEF: 5 };
   ids.sort((a, b) => order[P(a)?.pos] - order[P(b)?.pos] || vals[b] - vals[a]);
   const W = [S.week, S.week + 1, S.week + 2].filter((w) => w <= 17);
-  const wk = M.lineupValue(S, M.activeIds(ME)).weeks;
+  const wk = M.lineupValue(S, M.lineupIds(ME)).weeks;
   return `<div class="card"><h2>My roster <small>form = how recent results move the projection (1.00 = on track)</small></h2><div class="scroll">
     <table><tr><th class="l">Player</th><th>Wk 1–${S.week - 1}</th><th>Snap% · tgt · ru (last 3)</th><th>Form</th>${W.map((w) => `<th>W${w}</th>`).join('')}<th>Bye</th><th>ROS val</th><th>Market</th></tr>
     ${ids.map((id) => { const p = P(id); if (!p) return ''; const u = p.use.slice(-3).filter(Boolean);
@@ -466,7 +466,7 @@ function renderPlayoffs() {
   const pWeeks = [pw, pw + 1, pw + 2];
   const lus = Object.fromEntries(pWeeks.map((w) => [w, myLineup(ME.rid, w)]));
   const starts = (id, w) => lus[w].lineup.some((x) => x.p?.id === id);
-  const myIds = M.activeIds(ME).filter((id) => P(id)).sort((a, b) => pWeeks.reduce((t, w) => t + M.weekDist(P(b), w, S.week, S.live).mean - M.weekDist(P(a), w, S.week, S.live).mean, 0));
+  const myIds = M.lineupIds(ME).filter((id) => P(id)).sort((a, b) => pWeeks.reduce((t, w) => t + M.weekDist(P(b), w, S.week, S.live).mean - M.weekDist(P(a), w, S.week, S.live).mean, 0));
   // slot comparison vs the other likely playoff teams in the title weeks
   const rivals = [...S.teams].filter((t) => !t.me).sort((a, b) => SIM.odds[b.rid].playoffs - SIM.odds[a.rid].playoffs).slice(0, S.league.playoff_teams - 1);
   const slotCmp = [pw + 1, pw + 2].map((w) => {
@@ -548,7 +548,7 @@ function titleMovesCard() {
 function regularSeasonDelta(r) {
   const mine = M.activeIds(ME), to = PW() - 1;
   const ids = M.trimRoster(S, [...mine.filter((x) => !r.give.includes(x)), ...r.get]).ids;
-  return M.lineupValue(S, ids, { from: S.week, to }).value - M.lineupValue(S, mine, { from: S.week, to }).value;
+  return M.lineupValue(S, M.withIR(ME, ids, r.give), { from: S.week, to }).value - M.lineupValue(S, M.lineupIds(ME), { from: S.week, to }).value;
 }
 function runMoveSearch() {
   MOVES.running = true; MOVES.progress = 0; MOVES.sims = {};
@@ -569,6 +569,7 @@ function simMove(key) {
   const rosters = Object.fromEntries(S.teams.map((t) => [t.rid, M.activeIds(t)]));
   rosters[ME.rid] = M.trimRoster(S, [...rosters[ME.rid].filter((x) => !r.give.includes(x)), ...r.get]).ids;
   if (r.partner) rosters[r.partner] = M.trimRoster(S, [...rosters[r.partner].filter((x) => !r.get.includes(x)), ...r.give]).ids;
+  for (const t of S.teams) rosters[t.rid] = M.withIR(t, rosters[t.rid], [...r.give, ...r.get]);
   const owned = r.get.map((id) => [id, P(id).own]);
   if (!r.partner) { r.get.forEach((id) => (P(id).own = ME.rid)); delete S._floor; } // keep the free agent out of stream floors
   const after = M.simulate(S, { rosters, n: 4000 });

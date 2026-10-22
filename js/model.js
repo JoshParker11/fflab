@@ -145,6 +145,11 @@ function expectedLineup(snap, ids, w, slots) {
 
 export const starterSlots = (snap) => snap.league.roster_positions.filter((s) => !['BN', 'IR'].includes(s));
 export const activeIds = (t) => t.players.filter((id) => !(t.reserve || []).includes(id));
+// Valuation pool = active roster + IR stashes. IR players project 0 while out and count again
+// once their projections resume (a returning Charbonnet is part of the team's future), but they
+// never count against roster size. `exclude` drops anyone traded away.
+export const withIR = (t, ids, exclude = []) => [...ids, ...(t.reserve || []).filter((id) => !ids.includes(id) && !exclude.includes(id))];
+export const lineupIds = (t) => withIR(t, activeIds(t));
 
 export function timeWeight(w, cur) { return TIME_DECAY ** (w - cur); }
 
@@ -174,7 +179,7 @@ export function simulate(snap, { rosters, n = 4000, seed = 7 } = {}) {
   const cur = snap.week, lastReg = snap.league.playoff_week_start - 1;
   const slots = starterSlots(snap);
   const rids = snap.teams.map((t) => t.rid);
-  const ids = rosters || Object.fromEntries(snap.teams.map((t) => [t.rid, activeIds(t)]));
+  const ids = rosters || Object.fromEntries(snap.teams.map((t) => [t.rid, lineupIds(t)]));
   const dist = {}; // dist[w][rid] = {mean, sd}
   for (let w = cur; w <= 17; w++) {
     dist[w] = {};
@@ -262,9 +267,11 @@ export function evalTrade(snap, myRid, partnerRid, give, get, { n = 3000 } = {})
   const before = Object.fromEntries(snap.teams.map((t) => [t.rid, activeIds(t)]));
   const mine = trimRoster(snap, [...before[myRid].filter((id) => !give.includes(id)), ...get]);
   const theirs = trimRoster(snap, [...before[partnerRid].filter((id) => !get.includes(id)), ...give]);
-  const after = { ...before, [myRid]: mine.ids, [partnerRid]: theirs.ids };
+  const moved = [...give, ...get];
+  const full = Object.fromEntries(snap.teams.map((t) => [t.rid, lineupIds(t)]));
+  const after = { ...full, [myRid]: withIR(me, mine.ids, moved), [partnerRid]: withIR(them, theirs.ids, moved) };
   const lv = (ids) => lineupValue(snap, ids);
-  const [mb, ma, tb, ta] = [lv(before[myRid]), lv(mine.ids), lv(before[partnerRid]), lv(theirs.ids)];
+  const [mb, ma, tb, ta] = [lv(full[myRid]), lv(after[myRid]), lv(full[partnerRid]), lv(after[partnerRid])];
   const s0 = simulate(snap, { n }), s1 = simulate(snap, { rosters: after, n });
   const fc = (ids) => ids.reduce((t, id) => t + (snap.players[id]?.fc || 0), 0);
   const giveFc = fc(give), getFc = fc(get);
@@ -287,8 +294,9 @@ export function evalTrade(snap, myRid, partnerRid, give, get, { n = 3000 } = {})
 export function waiverBoard(snap, rid, { limit = 40 } = {}) {
   const t = snap.teams.find((x) => x.rid === rid);
   const ids = activeIds(t);
-  const base = lineupValue(snap, ids);
-  const drops = ids.map((id) => ({ id, v: lineupValue(snap, ids.filter((x) => x !== id)).value }))
+  const L = (x) => lineupValue(snap, withIR(t, x));
+  const base = L(ids);
+  const drops = ids.map((id) => ({ id, v: L(ids.filter((x) => x !== id)).value }))
     .sort((a, b) => b.v - a.v); // highest remaining value = least costly drop
   const free = Object.values(snap.players).filter((p) => !p.own && p.pos)
     .map((p) => ({ p, pv: playerValue(snap, p.id) }))
@@ -300,7 +308,7 @@ export function waiverBoard(snap, rid, { limit = 40 } = {}) {
     // e.g. one defense for another).
     const cands = [...drops.slice(0, 4), ...drops.filter((d) => snap.players[d.id]?.pos === p.pos)];
     const tried = [...new Map(cands.map((c) => [c.id, c])).values()].map((d) => {
-      const v = lineupValue(snap, [...ids.filter((x) => x !== d.id), p.id]);
+      const v = L([...ids.filter((x) => x !== d.id), p.id]);
       return { gain: v.value - base.value, drop: d.id, weeks: v.weeks.map((x, i) => x - base.weeks[i]) };
     });
     // Drops within 2 points are a coin flip for the model, so cut the one whose role is shrinking.
@@ -337,7 +345,7 @@ export function positionProfile(snap, w = snap.week) {
   const slots = starterSlots(snap);
   const prof = {};
   for (const t of snap.teams) {
-    const { lineup } = bestLineup(activeIds(t), snap.players, w, snap.week, slots, snap.live);
+    const { lineup } = bestLineup(lineupIds(t), snap.players, w, snap.week, slots, snap.live);
     const g = {};
     for (const x of lineup) { const k = x.slot; g[k] = (g[k] || 0) + x.mean; }
     prof[t.rid] = g;
@@ -373,9 +381,9 @@ export function waiverPlan(snap, rid, { steps = 3, minGain = 2 } = {}) {
 // run it in slices without freezing.
 export function* titleMoveSearch(snap, rid, { from = snap.league.playoff_week_start + 1, to = 17, maxGive = 2 } = {}) {
   const P = snap.players, me = snap.teams.find((t) => t.rid === rid);
-  const lv = (ids, a = from, b = to) => lineupValue(snap, ids, { from: a, to: b });
+  const lv = (ids, t = me, a = from, b = to) => lineupValue(snap, withIR(t, ids), { from: a, to: b });
   const per = (v) => v.weeks.reduce((x, y) => x + y, 0) / v.weeks.length; // pts per title game
-  const mine = activeIds(me), base = lv(mine), baseReg = lineupValue(snap, mine, { from: snap.week, to: snap.league.playoff_week_start - 1 }).value;
+  const mine = activeIds(me), base = lv(mine), baseReg = lineupValue(snap, withIR(me, mine), { from: snap.week, to: snap.league.playoff_week_start - 1 }).value;
   const pool = mine.filter((id) => !['K', 'DEF'].includes(P[id]?.pos));
   const gives = [];
   for (let i = 0; i < pool.length; i++) {
@@ -403,14 +411,14 @@ export function* titleMoveSearch(snap, rid, { from = snap.league.playoff_week_st
     done++; if (done % 5 === 0) yield { done, total };
   }
   for (const { t, get, theirs } of jobs) {
-    const tb = lv(theirs);
+    const tb = lv(theirs, t);
     for (const give of gives) {
       const ids = trimRoster(snap, [...mine.filter((x) => !give.includes(x)), get]).ids;
       const g = per(lv(ids)) - per(base);
       if (g < 0.5) continue;
       const their = trimRoster(snap, [...theirs.filter((x) => x !== get), ...give]).ids;
       const gv = give.reduce((s2, id) => s2 + (P[id].fc || 0), 0), gt = P[get].fc || 0;
-      rows.push({ kind: 'trade', partner: t.rid, give, get: [get], gain: g, theirGain: per(lv(their)) - per(tb),
+      rows.push({ kind: 'trade', partner: t.rid, give, get: [get], gain: g, theirGain: per(lv(their, t)) - per(tb),
         gap: Math.abs(gv - gt) / Math.max(gv, gt, 1), gv, gt });
     }
     done++; yield { done, total };
@@ -420,7 +428,7 @@ export function* titleMoveSearch(snap, rid, { from = snap.league.playoff_week_st
   for (const r of rows.slice(0, 40)) {
     const ids = r.kind === 'FA' ? [...mine.filter((x) => !r.give.includes(x)), ...r.get]
       : trimRoster(snap, [...mine.filter((x) => !r.give.includes(x)), ...r.get]).ids;
-    r.regDelta = lineupValue(snap, ids, { from: snap.week, to: snap.league.playoff_week_start - 1 }).value - baseReg;
+    r.regDelta = lineupValue(snap, withIR(me, ids), { from: snap.week, to: snap.league.playoff_week_start - 1 }).value - baseReg;
   }
   return rows;
 }
@@ -436,6 +444,8 @@ export function runScenario(snap, steps, { n = 4000, seed = 11, base } = {}) {
     if (st.partner != null) rosters[st.partner] = trimRoster(snap, [...rosters[st.partner].filter((x) => !st.get.includes(x)), ...st.give]).ids;
     else for (const id of st.get) { touched.push([id, snap.players[id].own]); snap.players[id].own = me.rid; }
   }
+  const moved = steps.flatMap((st) => [...st.give, ...st.get]);
+  for (const t of snap.teams) rosters[t.rid] = withIR(t, rosters[t.rid], moved);
   delete snap._floor;
   const b = base || simulate(snap, { n, seed });
   const a = simulate(snap, { rosters, n, seed });

@@ -58,7 +58,7 @@ ${chart({ type: 'bars', labels: weeksFrom(r.me.weekly.length), values: r.me.week
     b.map((r) => { const p = P(r.id); return `| ${p.name}${p.inj ? ` (${p.inj})` : ''} | ${p.pos} ${p.team} | ${sgn(r.gain)} | ${r.weeks.slice(0, 3).map(sgn).join(' / ')} | $${r.bid} | ${P(r.drop).name} | ${p.add24 ? `${Math.round(p.add24 / 1000)}k` : ''} |`; }).join('\n'));
 } else if (cmd === 'outlook') {
   const sim = M.simulate(S, { n: 5000 });
-  const wk = M.lineupValue(S, M.activeIds(ME)).weeks;
+  const wk = M.lineupValue(S, M.lineupIds(ME)).weeks;
   const rem = Object.keys(S.schedule).map(Number).filter((w) => w >= S.week && w < S.league.playoff_week_start);
   const owner = (rid) => S.teams.find((t) => t.rid === rid).owner;
   console.log(`| Team | W-L | Playoffs | Bye | #1 | Title |\n|---|---|---|---|---|---|\n` +
