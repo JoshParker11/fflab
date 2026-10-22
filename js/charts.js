@@ -64,3 +64,21 @@ export function fromSpec(spec) {
   if (spec.type === 'lines') return lines(spec);
   return bars(spec);
 }
+
+// Scatter: points [{x, y, label, color}], optional diagonal (y = x) and inverted axes for ranks.
+export function scatter({ points, height = 260, xLabel = '', yLabel = '', diagonal = false, invert = false, max }) {
+  const W = 420, H = height, pad = { t: 10, b: 30, l: 34, r: 10 };
+  const hi = max ?? Math.max(1, ...points.map((p) => Math.max(p.x, p.y)));
+  const sx = (v) => pad.l + ((invert ? v - 1 : v) / (invert ? hi - 1 : hi)) * (W - pad.l - pad.r);
+  const sy = (v) => invert ? pad.t + ((v - 1) / (hi - 1)) * (H - pad.t - pad.b) : H - pad.b - (v / hi) * (H - pad.t - pad.b);
+  let g = '';
+  for (let k = 0; k <= 4; k++) {
+    const v = invert ? 1 + ((hi - 1) * k) / 4 : (hi * k) / 4;
+    g += `<line class="axis" x1="${pad.l}" x2="${W - pad.r}" y1="${sy(v)}" y2="${sy(v)}" stroke-dasharray="2 3"/><text x="${pad.l - 4}" y="${sy(v) + 4}" text-anchor="end">${Math.round(v)}</text>`;
+    g += `<text x="${sx(v)}" y="${H - 14}" text-anchor="middle">${Math.round(v)}</text>`;
+  }
+  if (diagonal) g += `<line x1="${sx(invert ? 1 : 0)}" y1="${sy(invert ? 1 : 0)}" x2="${sx(hi)}" y2="${sy(hi)}" stroke="var(--faint)" stroke-dasharray="4 4"/>`;
+  for (const p of points) g += `<circle cx="${sx(p.x)}" cy="${sy(p.y)}" r="3.4" fill="${p.color || 'var(--info)'}" fill-opacity="0.75"><title>${esc(p.label || '')}</title></circle>`;
+  g += `<text x="${(W + pad.l) / 2}" y="${H - 1}" text-anchor="middle">${esc(xLabel)}</text><text x="10" y="${pad.t + 4}" text-anchor="start">${esc(yLabel)}</text>`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}">${g}</svg>`;
+}

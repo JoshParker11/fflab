@@ -1,6 +1,6 @@
-import * as M from './model.js?v=1792634909';
-import { bars, lines, spark, fromSpec } from './charts.js?v=1792634909';
-import { overlay } from './live.js?v=1792634909';
+import * as M from './model.js?v=1792637901';
+import { bars, lines, spark, fromSpec, scatter } from './charts.js?v=1792637901';
+import { overlay } from './live.js?v=1792637901';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -59,7 +59,7 @@ async function load() {
 }
 
 const TABS = { command: renderCommand, pulse: renderPulse, waivers: renderWaivers, trade: renderTrade,
-  opponents: renderOpponents, roster: renderRoster, playoffs: renderPlayoffs, scenarios: renderScenarios, research: renderResearch, model: renderModel, lab: renderLab };
+  opponents: renderOpponents, roster: renderRoster, playoffs: renderPlayoffs, scenarios: renderScenarios, research: renderResearch, model: renderModel, insights: renderInsights, lab: renderLab };
 function route() {
   const [tab, arg] = (location.hash.slice(1) || 'command').split('/');
   document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
@@ -819,6 +819,63 @@ function playerConvergence(d) {
   </div>`;
 }
 
+
+// ------------------------------------------------------------ insights
+let INS = null; const INSV = { pos: 'WR', season: 'all' };
+function renderInsights() {
+  if (!INS) { loadJSON('data/insights.json').then((d) => { INS = d; route(); }).catch(() => { INS = { error: 1 }; route(); }); return '<div class="loading">loading insights…</div>'; }
+  if (INS.error) return '<div class="card"><div class="empty">Run tools/insights.py.</div></div>';
+  const c = INS.convergence, ks = c.as_of;
+  const conv = lines({ labels: ks.map((k) => `${k}`), height: 210, fmt: (v) => v.toFixed(1), series: [
+    { name: "Sleeper's newest projection", values: c.sleeper, color: 'var(--info)' },
+    { name: 'our model (2024–25)', values: c.model, color: 'var(--good)' },
+    { name: 'season average so far', values: c.ppg, color: 'var(--faint)' },
+    { name: `one ordinary week's miss (${c.one_week_miss})`, values: ks.map(() => c.one_week_miss), color: 'var(--bad)', dash: true },
+    { name: `pure luck floor (${c.noise_floor})`, values: ks.map(() => c.noise_floor), color: 'var(--act)', dash: true }] });
+  const first = c.sleeper[0], last = c.sleeper.at(-1);
+  // ranks scatter
+  const R = INS.ranks.filter((r) => r.pos === INSV.pos && (INSV.season === 'all' || String(r.y) === INSV.season));
+  const cut = INS.stay_top[INSV.pos].cut, maxRank = Math.max(...R.map((r) => Math.max(r.reg_rank, r.po_rank)));
+  const pts = R.map((r) => ({ x: r.reg_rank, y: r.po_rank, label: `${r.y} ${r.name}: #${r.reg_rank} season → #${r.po_rank} playoffs (${r.reg_ppg} → ${r.po_ppg} ppg)`,
+    color: r.reg_rank <= cut ? (r.po_rank <= cut ? 'var(--good)' : 'var(--bad)') : 'var(--faint)' }));
+  const movers = INSV.season === 'all' ? [] : [...R].sort((a, b) => (a.po_rank - a.reg_rank) - (b.po_rank - b.reg_rank));
+  // schedule bars: easiest third minus hardest third, per position
+  const POSS = ['QB', 'RB', 'WR', 'TE'];
+  const gap = (p, w) => { const s = INS.schedule[p][w]; return s['easiest third'].playoff_minus_season_ppg - s['hardest third'].playoff_minus_season_ppg; };
+  const sched = bars({ labels: POSS.flatMap((p) => [`${p} Oct`, `${p} hind.`]), values: POSS.flatMap((p) => [gap(p, 'october'), gap(p, 'hindsight')]),
+    color: (v, i) => (i % 2 ? 'var(--faint)' : 'var(--act)'), fmt: (v) => `+${v.toFixed(1)}`, height: 190 });
+  return `
+  <div class="card"><h2>1 · How much should you trust a playoff projection? <small>${INS.seasons[0]}–${INS.seasons.at(-1)} · avg miss on a player's Weeks 15–17 points per game, by the week the projection was made</small></h2>
+    ${conv}
+    <div class="grid half" style="margin-top:8px">
+      <p class="muted" style="margin:0">Projecting the playoffs in <b>Week 0</b>, Sleeper misses a player's playoff average by <b>${first.toFixed(1)}</b> pts/game. By <b>Week 14</b> it's still <b>${last.toFixed(1)}</b>, only ${Math.round((1 - last / first) * 100)}% better. Projections <i>barely converge</i>: most of what happens in December isn't knowable in October.</p>
+      <p class="muted" style="margin:0">The gold dashed line is the <b>luck floor</b>: even knowing a player's true talent exactly, a 3-game playoff average still misses by about ${c.noise_floor}. The red dashed line is the typical miss on <b>one ordinary week</b> (${c.one_week_miss}). Playoff projections sit between the two. Useful, but treat a 2-point projected edge as a coin flip.</p>
+    </div></div>
+  <div class="card" style="margin-top:14px"><h2>2 · Do the season's best players stay the best in the playoffs? <small>regular-season rank (Weeks 1–14 ppg) vs playoff rank (Weeks 15–17 ppg) among each year's top players</small></h2>
+    <div class="row" style="flex-wrap:wrap;gap:8px;margin-bottom:6px"><div class="seg">${POSS.map((p) => `<button data-inspos="${p}" class="${p === INSV.pos ? 'on' : ''}">${p}</button>`).join('')}</div>
+      <select id="ins-season"><option value="all">all seasons</option>${INS.seasons.map((y) => `<option ${String(y) === INSV.season ? 'selected' : ''}>${y}</option>`).join('')}</select></div>
+    <div class="grid two">
+      <div>${scatter({ points: pts, invert: true, diagonal: true, max: maxRank, xLabel: 'regular-season rank', yLabel: 'playoff rank' })}
+        <p class="faint" style="font-size:12px">Green = top-${cut} in the season and still top-${cut} in the playoffs. Red = top-${cut} who fell out. Points on the dashed line kept their rank. Hover a dot for the player.</p></div>
+      <div><table><tr><th class="l">Pos</th><th>Stayed in top tier</th><th class="l"></th></tr>
+        ${POSS.map((p) => { const t = INS.stay_top[p]; const r = t.stayed / t.of; return `<tr><td class="l">${p} top-${t.cut}</td><td><b>${pct(r)}</b><span class="sub">${t.stayed} of ${t.of}</span></td><td style="width:45%"><div style="height:8px;border-radius:4px;background:var(--good);width:${r * 100}%"></div></td></tr>`; }).join('')}</table>
+        <p class="muted" style="font-size:13px">About two-thirds to three-quarters of a season's top tier stays top tier in the playoffs. Elite players are the safest bet, and WRs churn the most.</p>
+        ${movers.length ? `<div class="muted" style="font-size:12.5px;margin-top:8px">${INSV.season} biggest risers: ${movers.slice(0, 3).map((r) => `${esc(r.name)} (#${r.reg_rank}→#${r.po_rank})`).join(', ')}<br>Biggest fallers: ${movers.slice(-3).reverse().map((r) => `${esc(r.name)} (#${r.reg_rank}→#${r.po_rank})`).join(', ')}</div>` : ''}</div>
+    </div></div>
+  <div class="card" style="margin-top:14px"><h2>3 · How much does a soft playoff schedule matter? <small>playoff-minus-season ppg: easiest third of schedules minus hardest third</small></h2>
+    <div class="grid two"><div>${sched}<div class="legend"><span style="--c:var(--act)">judged in October (what you can know)</span><span style="--c:var(--faint)">in hindsight (what actually happened)</span></div></div>
+    <div><table><tr><th class="l">Pos</th><th>Schedule edge you can see in Oct</th><th>Edge in hindsight</th></tr>
+      ${POSS.map((p) => `<tr><td class="l">${p}</td><td><b>${sgn(gap(p, 'october'))}</b> ppg</td><td class="faint">${sgn(gap(p, 'hindsight'))} ppg</td></tr>`).join('')}</table>
+      <p class="muted" style="font-size:13px">Schedules <i>do</i> matter: in hindsight the softest third of playoff slates beat the hardest by 1–4 points a game. But almost none of that is visible in October. Picking "schedule-friendly" players was worth about <b>+1 ppg at QB and RB</b> and roughly <b>nothing at WR and TE</b>. Use schedule as a tiebreaker between similar players, never as a reason to trade down in talent.</p></div></div></div>
+  <div class="card" style="margin-top:14px"><h2>What this means for you</h2>
+    <ul class="muted" style="margin:0;padding-left:18px;line-height:1.7">
+      <li><b>Projections are a starting point, not a verdict.</b> A 2–3 point projected difference in the playoffs is mostly noise. Bigger gaps (5+) are real.</li>
+      <li><b>Pay for talent and role, not for schedules.</b> Elite players stay elite about 70–80% of the time; schedule picked in October adds about 1 point at QB/RB.</li>
+      <li><b>Your information edge lives in the news</b> (practice reports, coach comments, role changes like Bernard's). The numbers can't see that, so it's where your judgment should go.</li>
+      <li><b>In December, matchups get real.</b> Week-of Vegas lines and injury news carry the schedule signal that October rankings can't. Decide K, DEF and close start/sits then.</li>
+    </ul></div>`;
+}
+
 // ------------------------------------------------------------ events
 function afterRender(tab) {
   const arg = location.hash.split('/')[1];
@@ -834,6 +891,7 @@ document.addEventListener('click', (e) => {
   if (e.target.id === 'clear-trade') { Object.assign(T, { give: [], get: [], result: null }); route(); }
   if (e.target.id === 'find-moves') { runMoveSearch(); return; }
   if (e.target.id === 'run-all-sc') { runAllScenarios(); return; }
+  const ip = e.target.closest('[data-inspos]'); if (ip) { INSV.pos = ip.dataset.inspos; route(); return; }
   const mp = e.target.closest('[data-mpos]'); if (mp) { MX.mpos = mp.dataset.mpos; route(); return; }
   const mxp = e.target.closest('[data-mxpos]'); if (mxp) { MX.pos = mxp.dataset.mxpos; route(); return; }
   const mxs = e.target.closest('[data-mxsel]'); if (mxs) { MX.sel = mxs.dataset.mxsel; route(); return; }
@@ -851,6 +909,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('change', (e) => {
   if (e.target.id === 'give-sel' && e.target.value) { T.give.push(e.target.value); T.result = null; route(); }
   if (e.target.id === 'get-sel' && e.target.value) { T.get.push(e.target.value); T.result = null; route(); }
+  if (e.target.id === 'ins-season') { INSV.season = e.target.value; route(); return; }
   if (e.target.id === 'mx-season') { MX.season = e.target.value; MX.sel = null; route(); return; }
   if (e.target.id === 'mx-league') { MX.league = e.target.checked; route(); return; }
   if (e.target.id === 'mx-tgt') { MX.tgt = +e.target.value; route(); return; }
