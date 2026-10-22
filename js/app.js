@@ -1,6 +1,6 @@
-import * as M from './model.js?v=1792637977';
-import { bars, lines, spark, fromSpec, scatter } from './charts.js?v=1792637977';
-import { overlay } from './live.js?v=1792637977';
+import * as M from './model.js?v=1792638044';
+import { bars, lines, spark, fromSpec, scatter } from './charts.js?v=1792638044';
+import { overlay } from './live.js?v=1792638044';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -842,8 +842,9 @@ function renderInsights() {
   // schedule bars: easiest third minus hardest third, per position
   const POSS = ['QB', 'RB', 'WR', 'TE'];
   const gap = (p, w) => { const s = INS.schedule[p][w]; return s['easiest third'].playoff_minus_season_ppg - s['hardest third'].playoff_minus_season_ppg; };
-  const sched = bars({ labels: POSS.flatMap((p) => [`${p} Oct`, `${p} hind.`]), values: POSS.flatMap((p) => [gap(p, 'october'), gap(p, 'hindsight')]),
-    color: (v, i) => (i % 2 ? 'var(--faint)' : 'var(--act)'), fmt: (v) => `+${v.toFixed(1)}`, height: 190 });
+  const gmax = Math.max(...POSS.flatMap((p) => [gap(p, 'october'), gap(p, 'hindsight')]), 1);
+  const hbar = (v, color) => `<div class="row" style="gap:8px"><div style="flex:1;background:var(--panel2);border-radius:4px;height:12px"><div style="height:12px;border-radius:4px;background:${color};width:${Math.max(1, (Math.max(0, v) / gmax) * 100)}%"></div></div><b style="width:44px;text-align:right">${sgn(v)}</b></div>`;
+  const sched = POSS.map((p) => `<div style="margin-bottom:10px"><div class="muted" style="font-size:12.5px">${p}</div>${hbar(gap(p, 'october'), 'var(--act)')}${hbar(gap(p, 'hindsight'), 'var(--faint)')}</div>`).join('');
   return `
   <div class="card"><h2>1 · How much should you trust a playoff projection? <small>${INS.seasons[0]}–${INS.seasons.at(-1)} · avg miss on a player's Weeks 15–17 points per game, by the week the projection was made</small></h2>
     ${conv}
