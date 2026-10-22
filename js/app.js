@@ -1,6 +1,6 @@
-import * as M from './model.js?v=1792637901';
-import { bars, lines, spark, fromSpec, scatter } from './charts.js?v=1792637901';
-import { overlay } from './live.js?v=1792637901';
+import * as M from './model.js?v=1792637977';
+import { bars, lines, spark, fromSpec, scatter } from './charts.js?v=1792637977';
+import { overlay } from './live.js?v=1792637977';
 
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));

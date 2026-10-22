@@ -23,7 +23,8 @@ export function bars({ labels, values, height = 150, color, fmt = (v) => v.toFix
 // Multi-series lines. series: [{name, values, color}]
 export function lines({ labels, series, height = 170, fmt = (v) => v.toFixed(0) }) {
   const W = 560, H = height, pad = { t: 10, b: 22, l: 32, r: 8 };
-  const all = series.flatMap((s) => s.values.filter((v) => v != null));
+  const all = series.flatMap((s) => s.values.filter((v) => v != null && Number.isFinite(v)));
+  if (!all.length) return '<div class="empty">No data for this selection (bye week or not projected).</div>';
   let max = Math.max(...all), min = Math.min(...all);
   const m = (max - min) * 0.1 || 1; max += m; min = Math.max(0, min - m);
   const x = (i) => pad.l + (i / Math.max(1, labels.length - 1)) * (W - pad.l - pad.r);
